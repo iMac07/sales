@@ -1,6 +1,6 @@
-package org.xersys.benta.bo;
+package org.xersys.sales.base;
 
-import org.xersys.imbentaryo.bo.Inventory;
+import org.xersys.inventory.base.Inventory;
 import com.mysql.jdbc.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -10,24 +10,24 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import org.xersys.benta.dto.Sales_Detail;
-import org.xersys.benta.dto.Sales_Master;
-import org.xersys.benta.dto.Sales_Others;
-import org.xersys.lib.dto.Temp_Transactions;
-import org.xersys.kumander.contants.SearchEnum;
-import org.xersys.kumander.iface.LMasDetTrans;
-import org.xersys.kumander.iface.XEntity;
-import org.xersys.kumander.iface.XMasDetTrans;
-import org.xersys.kumander.iface.XNautilus;
-import org.xersys.kumander.util.MiscUtil;
-import org.xersys.kumander.util.SQLUtil;
-import org.xersys.kumander.contants.EditMode;
-import org.xersys.kumander.contants.RecordStatus;
-import org.xersys.kumander.contants.TransactionStatus;
-import org.xersys.kumander.util.CommonUtil;
+import org.xersys.sales.pojo.Sales_Detail;
+import org.xersys.sales.pojo.Sales_Master;
+import org.xersys.sales.pojo.Sales_Others;
+import org.xersys.lib.pojo.Temp_Transactions;
+import org.xersys.commander.iface.LMasDetTrans;
+import org.xersys.commander.iface.XEntity;
+import org.xersys.commander.iface.XMasDetTrans;
+import org.xersys.commander.iface.XNautilus;
+import org.xersys.commander.util.MiscUtil;
+import org.xersys.commander.util.SQLUtil;
+import org.xersys.commander.contants.EditMode;
+import org.xersys.commander.contants.RecordStatus;
+import org.xersys.commander.contants.TransactionStatus;
+import org.xersys.commander.util.CommonUtil;
+import org.xersys.inventory.search.InvSearchEngine;
 
 public class Sales implements XMasDetTrans{
-    private final String SOURCE_CODE = "Sale";
+    private final String SOURCE_CODE = "SO";
     
     private XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
@@ -230,7 +230,7 @@ public class Sales implements XMasDetTrans{
     }
     
     @Override
-    public JSONObject Search(SearchEnum.Type foType, String fsValue, String fsKey, String fsFilter, int fnMaxRow, boolean fbExact){
+    public JSONObject Search(Enum foType, String fsValue, String fsKey, String fsFilter, int fnMaxRow, boolean fbExact){
         JSONObject loJSON = new JSONObject();
         
         if (p_oInventory == null){
@@ -352,7 +352,6 @@ public class Sales implements XMasDetTrans{
 
                 loNewEnt.setValue("nEntryNox", getItemCount());
 
-                loNewEnt.setValue("sModified", (String) p_oNautilus.getUserInfo("sUserIDxx"));
                 loNewEnt.setValue("dModified", p_oNautilus.getServerDate());
 
                 lsSQL = MiscUtil.makeSQL((XEntity) loNewEnt);
@@ -941,14 +940,30 @@ public class Sales implements XMasDetTrans{
     }
     
     private boolean isEntryOK(){
+        //delete the last detail record if stock id
+        int lnCtr = getItemCount() - 1;
+        if ("".equals((String) p_oDetail.get(lnCtr).getValue("sStockIDx"))){
+            p_oDetail.remove(lnCtr);
+            p_oOthers.remove(lnCtr);
+        }
+        
+        //validate if there is a detail record
+        if (getItemCount() <= 0) {
+            setMessage("There is no item in this transaction");
+            addDetail(); //add detail to prevent error on the next attempt of saving
+            return false;
+        }
+        
+        //assign values to master record
         p_oMaster.setValue("sBranchCd", (String) p_oNautilus.getSysConfig("sBranchCd"));
         p_oMaster.setValue("dTransact", p_oNautilus.getServerDate());
         
-        for (int lnCtr = 0; lnCtr <= p_oTemp.size() -1; lnCtr ++){
+        //get the date and time the order was created and assign to master
+        for (lnCtr = 0; lnCtr <= p_oTemp.size() -1; lnCtr ++){
             if (p_sOrderNox.equals(p_oTemp.get(lnCtr).getOrderNo())){
                 p_oMaster.setValue("dCreatedx", p_oTemp.get(lnCtr).getDateCreated());
             }
-        }
+        }        
         
         //todo: add validations here
         return true;
@@ -960,7 +975,7 @@ public class Sales implements XMasDetTrans{
         
         switch(fsFieldNm){
             case "sStockIDx":
-                loJSON = Search(SearchEnum.Type.searchInvBranchComplex, fsValue, "a.sStockIDx", "", 1, true);
+                loJSON = Search(InvSearchEngine.Type.searchInvBranchComplex, fsValue, "a.sStockIDx", "", 1, true);
                 
                 if ("success".equals((String) loJSON.get("result"))){
                     loArray = (JSONArray) loJSON.get("payload");

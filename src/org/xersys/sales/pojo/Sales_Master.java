@@ -1,4 +1,4 @@
-package org.xersys.benta.dto;
+package org.xersys.sales.pojo;
 
 import java.io.Serializable;
 import java.util.Date;
@@ -12,8 +12,8 @@ import javax.persistence.Table;
 import javax.persistence.Temporal;
 import javax.persistence.TemporalType;
 import org.json.simple.JSONObject;
-import org.xersys.kumander.iface.XEntity;
-import org.xersys.kumander.util.SQLUtil;
+import org.xersys.commander.iface.XEntity;
+import org.xersys.commander.util.SQLUtil;
 
 @Entity
 @Table(name="Sales_Master")
@@ -89,9 +89,6 @@ public class Sales_Master implements Serializable, XEntity {
     @Temporal(TemporalType.TIMESTAMP)
     private Date dCreatedx;
     
-    @Column(name = "sModified")
-    private String sModified;
-    
     @Basic(optional = false)
     @Column(name = "dModified")
     @Temporal(TemporalType.TIMESTAMP)
@@ -122,7 +119,6 @@ public class Sales_Master implements Serializable, XEntity {
         laColumns.add("cTranStat");
         laColumns.add("sAprvCode");
         laColumns.add("dCreatedx");
-        laColumns.add("sModified");
         
         sTransNox = "";
         sBranchCd = "";
@@ -142,7 +138,6 @@ public class Sales_Master implements Serializable, XEntity {
         sSourceCd = "";
         cTranStat = "";
         sAprvCode = "";
-        sModified = "";
     }
     
     @Override
@@ -191,8 +186,7 @@ public class Sales_Master implements Serializable, XEntity {
             case 19: return cTranStat;
             case 20: return sAprvCode;
             case 21: return dCreatedx;
-            case 22: return sModified;
-            case 23: return dModified;
+            case 22: return dModified;
             default: return null;
         }
     }
@@ -244,8 +238,7 @@ public class Sales_Master implements Serializable, XEntity {
             case 19: cTranStat = (String) foValue; break;
             case 20: sAprvCode = (String) foValue; break;
             case 21: dCreatedx = (Date) foValue; break;
-            case 22: sModified = (String) foValue; break;
-            case 23: dModified = (Date) foValue; break;
+            case 22: dModified = (Date) foValue; break;
         }    
     }
 

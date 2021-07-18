@@ -1,4 +1,4 @@
-package org.xersys.benta.dto;
+package org.xersys.sales.pojo;
 
 import java.io.Serializable;
 import java.util.LinkedList;
@@ -9,7 +9,7 @@ import javax.persistence.Entity;
 import javax.persistence.Id;
 import javax.persistence.Table;
 import org.json.simple.JSONObject;
-import org.xersys.kumander.iface.XEntity;
+import org.xersys.commander.iface.XEntity;
 
 @Entity
 @Table(name="Sales_Detail")

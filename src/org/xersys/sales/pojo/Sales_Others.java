@@ -1,4 +1,4 @@
-package org.xersys.benta.dto;
+package org.xersys.sales.pojo;
 
 import java.util.LinkedList;
 import org.json.simple.JSONObject;
