@@ -209,25 +209,6 @@ public class Sales implements XMasDetTrans{
         
         return true;
     }
-
-    @Override
-    public JSONObject SearchMaster(String fsFieldNm, Object foValue) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public JSONObject SearchDetail(int fnRow, String fsFieldNm, Object foValue) {
-        if (fnRow < 0) return null;
-        
-        switch (fsFieldNm){
-            case "sBarCodex":
-                return null;
-            case "sDescript":
-                return null;
-            default:
-                return null;
-        }
-    }
     
     @Override
     public JSONObject Search(Enum foType, String fsValue, String fsKey, String fsFilter, int fnMaxRow, boolean fbExact){
