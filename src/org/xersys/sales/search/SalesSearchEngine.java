@@ -40,7 +40,7 @@ public class SalesSearchEngine implements XSearch{
     }
 
     @Override
-    public void sethMax(int fnValue) {
+    public void setMax(int fnValue) {
         _max = fnValue;
     }
 
