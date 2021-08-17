@@ -452,7 +452,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         loSearch.setKey(fsKey);
         loSearch.setFilter(fsFilter);
         loSearch.setExact(fbExact);
-        loSearch.sethMax(50);
+        loSearch.setMax(50);
         
         return loSearch.Search(SalesSearchEngine.Type.searchSOTransaction, fsValue);
     }
@@ -736,7 +736,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         
         p_oInventory.Search().setKey(fsKey);
         p_oInventory.Search().setFilter(fsFilter);
-        p_oInventory.Search().sethMax(fnMaxRow);
+        p_oInventory.Search().setMax(fnMaxRow);
         p_oInventory.Search().setExact(fbExact);
 
         return p_oInventory.Search().Search(foType, fsValue);
