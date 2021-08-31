@@ -23,6 +23,7 @@ import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
 import org.xersys.inventory.base.Inventory;
+import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 
 public class SP_Sales implements XMasDetTrans{
@@ -47,6 +48,8 @@ public class SP_Sales implements XMasDetTrans{
     private CachedRowSet p_oDetail;
     
     private ArrayList<Temp_Transactions> p_oTemp;
+    
+    private InvSearchF p_oSearchItem;
 
     public SP_Sales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
@@ -55,6 +58,9 @@ public class SP_Sales implements XMasDetTrans{
         p_nEditMode = EditMode.UNKNOWN;
         
         p_oInventory = new Inventory(p_oNautilus);
+        
+        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
+        
         loadTempTransactions();
     }
     
@@ -691,6 +697,18 @@ public class SP_Sales implements XMasDetTrans{
     @Override
     public ArrayList<Temp_Transactions> TempTransactions() {
         return p_oTemp;
+    }
+    
+    public JSONObject searchBranchInventory(String fsKey, Object foValue, String fsFilter, String fsValue, boolean fbExact){
+        p_oSearchItem.setKey(fsKey);
+        p_oSearchItem.setValue(foValue);
+        p_oSearchItem.setExact(fbExact);
+        
+        return p_oSearchItem.Search();
+    }
+    
+    public InvSearchF getSearchBranchInventory(){
+        return p_oSearchItem;
     }
     
     private String getSQ_Master(){
