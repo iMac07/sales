@@ -178,7 +178,7 @@ public class SP_Sales implements XMasDetTrans{
         try {
             switch (fsFieldNm){
                 case "sStockIDx":                     
-                    loadDetailByCode(fnRow, fsFieldNm, (JSONObject) foValue);
+                    getDetail(fnRow, "a.sStockIDx", foValue);
                     computeTotal();
                     
                     p_oMaster.first();
@@ -248,6 +248,13 @@ public class SP_Sales implements XMasDetTrans{
     @Override
     public boolean addDetail() {
         try {
+            if (getItemCount() > 0) {
+                if ("".equals((String) getDetail(getItemCount() - 1, "sStockIDx"))){
+                    saveToDisk(RecordStatus.ACTIVE, "");
+                    return true;
+                }
+            }
+            
             p_oDetail.last();
             p_oDetail.moveToInsertRow();
 
@@ -260,6 +267,7 @@ public class SP_Sales implements XMasDetTrans{
             return false;
         }
         
+        saveToDisk(RecordStatus.ACTIVE, "");
         return true;
     }
 
@@ -308,10 +316,10 @@ public class SP_Sales implements XMasDetTrans{
             return false;
         }
         
-        saveToDisk(RecordStatus.ACTIVE, "");
-        
-        loadTempTransactions();
         p_nEditMode = EditMode.ADDNEW;
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
+        loadTempTransactions();
         
         return true;
     }
@@ -699,7 +707,7 @@ public class SP_Sales implements XMasDetTrans{
         return p_oTemp;
     }
     
-    public JSONObject searchBranchInventory(String fsKey, Object foValue, String fsFilter, String fsValue, boolean fbExact){
+    public JSONObject searchBranchInventory(String fsKey, Object foValue, boolean fbExact){
         p_oSearchItem.setKey(fsKey);
         p_oSearchItem.setValue(foValue);
         p_oSearchItem.setExact(fbExact);
@@ -726,7 +734,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", a.nAddDiscx" +
                     ", a.nFreightx" +
                     ", a.nOthChrge" +
-                    ", a.dDeductnx" +
+                    ", a.nDeductnx" +
                     ", a.nAmtPaidx" +
                     ", a.dDueDatex" +
                     ", a.sTermCode" +
@@ -999,8 +1007,9 @@ public class SP_Sales implements XMasDetTrans{
         double lnDetlTotl;
         
         double lnTranTotal = 0.00;
+        int lnRow = getItemCount();
         
-        for (int lnCtr = 0; lnCtr < p_oDetail.size(); lnCtr++){
+        for (int lnCtr = 0; lnCtr < lnRow; lnCtr++){
             lnQuantity = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQuantity")));
             lnUnitPrce = ((Number)getDetail(lnCtr, "nUnitPrce")).doubleValue();
             lnDiscount = ((Number)getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
@@ -1025,13 +1034,14 @@ public class SP_Sales implements XMasDetTrans{
         return lbSuccess;
     }
     
-    private void loadDetailByCode(int fnRow, String fsFieldNm, JSONObject foValue) throws SQLException, ParseException{       
-        JSONObject loJSON = foValue;
+    private void getDetail(int fnRow, String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchBranchInventory(fsFieldNm, foValue, true);
+        JSONParser loParser = new JSONParser();
         
         switch(fsFieldNm){
-            case "sStockIDx":
+            case "a.sStockIDx":
                 if ("success".equals((String) loJSON.get("result"))){
-                    loJSON = (JSONObject) loJSON.get("payload");
+                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
                     
                     //check if the stock id was already exists
                     boolean lbExist = false;

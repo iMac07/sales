@@ -18,18 +18,16 @@ import org.xersys.commander.contants.TransactionStatus;
 import org.xersys.commander.iface.LMasDetTrans;
 import org.xersys.commander.iface.XMasDetTrans;
 import org.xersys.commander.iface.XNautilus;
-import org.xersys.commander.iface.XSearchRecord;
 import org.xersys.commander.util.CommonUtil;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
 import org.xersys.inventory.base.Inventory;
-import org.xersys.inventory.search.InvSearchEngine;
+import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
-import org.xersys.sales.search.SalesSearchEngine;
 
-public class NeoSales implements XMasDetTrans, XSearchRecord{
-    private final String SOURCE_CODE = "SO";
+public class JobOrder implements XMasDetTrans{
+    private final String SOURCE_CODE = "JO";
     
     private XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
@@ -48,20 +46,26 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
     
     private CachedRowSet p_oMaster;
     private CachedRowSet p_oDetail;
+    private CachedRowSet p_oPartsx;
     
     private ArrayList<Temp_Transactions> p_oTemp;
+    
+    private InvSearchF p_oSearchItem;
 
-    public NeoSales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
+    public JobOrder(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
         p_oInventory = new Inventory(p_oNautilus);
+        
+        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
+        
         loadTempTransactions();
     }
     
-    public NeoSales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
+    public JobOrder(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
@@ -95,7 +99,8 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             
             switch (fsFieldNm){
                 case "dTransact":
-                case "dCreatedx":
+                case "dStartedx":
+                case "dFinished":
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_TIMESTAMP))
                         p_oMaster.setObject(fsFieldNm, foValue);
                     else 
@@ -111,7 +116,11 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     
                     p_oMaster.updateRow();
                     break;
+                case "nLabrTotl":
+                case "nPartTotl":
                 case "nTranTotl":
+                case "nLabrPaid":
+                case "nPartPaid":
                 case "nVATRatex":
                 case "nDiscount":
                 case "nAddDiscx":
@@ -129,7 +138,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     p_oMaster.updateRow();
             }
             
-            p_oListener.MasterRetreive(fsFieldNm, p_oMaster.getObject(fsFieldNm));
+            if (p_oListener != null) p_oListener.MasterRetreive(fsFieldNm, p_oMaster.getObject(fsFieldNm));
              
             saveToDisk(RecordStatus.ACTIVE, "");
         } catch (SQLException e) {
@@ -172,12 +181,13 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         
         try {
             switch (fsFieldNm){
-                case "sStockIDx":
-                    loadDetailByCode(fnRow, fsFieldNm, (String) foValue);
+                case "sLaborCde":                     
+                    getDetail(fnRow, "a.sLaborCde", foValue);
                     computeTotal();
                     
                     p_oMaster.first();
-                    p_oListener.MasterRetreive("nTranTotl", p_oMaster.getObject("nTranTotl"));
+                    if (p_oListener != null) p_oListener.MasterRetreive("nLabrTotl", p_oMaster.getObject("nLabrTotl"));
+                    if (p_oListener != null) p_oListener.MasterRetreive("nTranTotl", p_oMaster.getObject("nTranTotl"));
                     
                     break;
                 default:
@@ -186,7 +196,40 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     p_oDetail.updateRow();
                     
                     computeTotal();
-                    p_oListener.DetailRetreive(fnRow, fsFieldNm, "");
+                    if (p_oListener != null) p_oListener.DetailRetreive(fnRow, fsFieldNm, "");
+            }
+            
+            saveToDisk(RecordStatus.ACTIVE, "");            
+        } catch (SQLException | ParseException e) {
+            e.printStackTrace();
+            setMessage(e.getMessage());
+        }
+    }
+    
+    public void setParts(int fnRow, String fsFieldNm, Object foValue) {
+        if (p_nEditMode != EditMode.ADDNEW &&
+            p_nEditMode != EditMode.UPDATE){
+            System.err.println("Transaction is not on update mode.");
+            return;
+        }
+        
+        try {
+            switch (fsFieldNm){
+                case "sStockIDx":                     
+                    getParts(fnRow, "a.sStockIDx", foValue);
+                    computeTotal();
+                    
+                    p_oMaster.first();
+                    if (p_oListener != null) p_oListener.MasterRetreive("nTranTotl", p_oMaster.getObject("nTranTotl"));
+                    
+                    break;
+                default:
+                    p_oDetail.absolute(fnRow + 1);
+                    p_oDetail.updateObject(fsFieldNm, foValue);
+                    p_oDetail.updateRow();
+                    
+                    computeTotal();
+                    if (p_oListener != null) p_oListener.DetailRetreive(fnRow, fsFieldNm, "");
             }
             
             saveToDisk(RecordStatus.ACTIVE, "");            
@@ -243,6 +286,13 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
     @Override
     public boolean addDetail() {
         try {
+            if (getItemCount() > 0) {
+                if ("".equals((String) getDetail(getItemCount() - 1, "sLaborCde"))){
+                    saveToDisk(RecordStatus.ACTIVE, "");
+                    return true;
+                }
+            }
+            
             p_oDetail.last();
             p_oDetail.moveToInsertRow();
 
@@ -255,6 +305,32 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             return false;
         }
         
+        saveToDisk(RecordStatus.ACTIVE, "");
+        return true;
+    }
+    
+    public boolean addParts() {
+        try {
+            if (getItemCount() > 0) {
+                if ("".equals((String) getDetail(getItemCount() - 1, "sStockIDx"))){
+                    saveToDisk(RecordStatus.ACTIVE, "");
+                    return true;
+                }
+            }
+            
+            p_oPartsx.last();
+            p_oPartsx.moveToInsertRow();
+
+            MiscUtil.initRowSet(p_oPartsx);
+
+            p_oPartsx.insertRow();
+            p_oPartsx.moveToCurrentRow();
+        } catch (SQLException e) {
+            setMessage(e.getMessage());
+            return false;
+        }
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
         return true;
     }
 
@@ -298,15 +374,22 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             p_oDetail.populate(loRS);
             MiscUtil.close(loRS);
             addDetail();
+            
+            lsSQL = MiscUtil.addCondition(getSQ_Parts(), "0=1");
+            loRS = p_oNautilus.executeQuery(lsSQL);
+            p_oPartsx = factory.createCachedRowSet();
+            p_oPartsx.populate(loRS);
+            MiscUtil.close(loRS);
+            addDetail();
         } catch (SQLException ex) {
             setMessage(ex.getMessage());
             return false;
         }
         
-        saveToDisk(RecordStatus.ACTIVE, "");
-        
-        loadTempTransactions();
         p_nEditMode = EditMode.ADDNEW;
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
+        loadTempTransactions();
         
         return true;
     }
@@ -369,7 +452,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             if ("".equals((String) getMaster("sTransNox"))){ //new record
                 Connection loConn = getConnection();
 
-                p_oMaster.updateObject("sTransNox", MiscUtil.getNextCode("Sales_Master", "sTransNox", true, loConn, p_sBranchCd));
+                p_oMaster.updateObject("sTransNox", MiscUtil.getNextCode("Job_Order_Master", "sTransNox", true, loConn, p_sBranchCd));
                 p_oMaster.updateObject("dModified", p_oNautilus.getServerDate());
                 p_oMaster.updateRow();
                 
@@ -379,13 +462,13 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                 int lnCtr = 1;
                 p_oDetail.beforeFirst();
                 while (p_oDetail.next()){
-                    if (!"".equals((String) p_oDetail.getObject("sStockIDx"))){
+                    if (!"".equals((String) p_oDetail.getObject("sLaborCde"))){
                         p_oDetail.updateObject("sTransNox", p_oMaster.getObject("sTransNox"));
                         p_oDetail.updateObject("nEntryNox", lnCtr);
                     
-                        lsSQL = MiscUtil.rowset2SQL(p_oDetail, "Sales_Detail", "sBarCodex;sDescript;nSelPrce1;nQtyOnHnd;xOthrInfo");
+                        lsSQL = MiscUtil.rowset2SQL(p_oDetail, "Job_Order_Detail", "sLaborNme");
 
-                        if(p_oNautilus.executeUpdate(lsSQL, "Sales_Detail", p_sBranchCd, "") <= 0){
+                        if(p_oNautilus.executeUpdate(lsSQL, "Job_Order_Detail", p_sBranchCd, "") <= 0){
                             if(!p_oNautilus.getMessage().isEmpty())
                                 setMessage(p_oNautilus.getMessage());
                             else
@@ -398,7 +481,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "Sales_Master", "sClientNm;xSalesman");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "Job_Order_Master", "xClientNm;xEngineNo;xFrameNox;xMechanic;xSrvcAdvs");
             } else { //old record
             }
             
@@ -409,7 +492,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                 return false;
             }
             
-            if(p_oNautilus.executeUpdate(lsSQL, "Sales_Master", p_sBranchCd, "") <= 0){
+            if(p_oNautilus.executeUpdate(lsSQL, "Job_Order_Master", p_sBranchCd, "") <= 0){
                 if(!p_oNautilus.getMessage().isEmpty())
                     setMessage(p_oNautilus.getMessage());
                 else
@@ -443,19 +526,6 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         System.out.println(this.getClass().getSimpleName() + ".SearchTransaction()");        
         return true;
     }
-    
-    @Override
-    public JSONObject SearchRecord(String fsValue, String fsKey, String fsFilter, int fnMaxRow, boolean fbExact){
-        System.out.println(this.getClass().getSimpleName() + ".SearchTransaction()");        
-        
-        SalesSearchEngine loSearch = new SalesSearchEngine(p_oNautilus);
-        loSearch.setKey(fsKey);
-        loSearch.setFilter(fsFilter);
-        loSearch.setExact(fbExact);
-        loSearch.setMax(50);
-        
-        return loSearch.Search(SalesSearchEngine.Type.searchSOTransaction, fsValue);
-    }
 
     @Override
     public boolean OpenTransaction(String fsTransNox) {
@@ -475,7 +545,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             p_oMaster.populate(loRS);
             MiscUtil.close(loRS);
             
-            //open detailo record
+            //open detail record
             lsSQL = MiscUtil.addCondition(getSQ_Detail(), "a.sTransNox = " + SQLUtil.toSQL(fsTransNox));
             loRS = p_oNautilus.executeQuery(lsSQL);
             p_oDetail = factory.createCachedRowSet();
@@ -489,12 +559,27 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                 return true;
             }
             
+            //open parts record
+            lsSQL = MiscUtil.addCondition(getSQ_Parts(), "a.sTransNox = " + SQLUtil.toSQL(fsTransNox));
+            loRS = p_oNautilus.executeQuery(lsSQL);
+            p_oPartsx = factory.createCachedRowSet();
+            p_oPartsx.populate(loRS);
+            MiscUtil.close(loRS);
+            
+            if (p_oMaster.size() == 1) {                
+                addParts();
+            
+                p_nEditMode  = EditMode.READY;
+                return true;
+            }
+            
             setMessage("No transction loaded.");
         } catch (SQLException ex) {
             ex.printStackTrace();
             setMessage(ex.getMessage());
         }
         
+        p_nEditMode  = EditMode.UNKNOWN;
         return false;
     }
 
@@ -539,7 +624,6 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
 
             String lsSQL = "UPDATE " + p_oMaster.getTableName()+ " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_CLOSED +
-                                ", sModified = " + SQLUtil.toSQL((String) p_oNautilus.getUserInfo("sUserIDxx")) +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
@@ -589,7 +673,6 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
 
             String lsSQL = "UPDATE " + p_oMaster.getTableName()+ " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_CANCELLED +
-                                ", sModified = " + SQLUtil.toSQL((String) p_oNautilus.getUserInfo("sUserIDxx")) +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
@@ -641,7 +724,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             lsSQL = "DELETE FROM " + p_oDetail.getTableName() +
                     " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
-            if (p_oNautilus.executeUpdate(lsSQL, "Sales_Detail", p_sBranchCd, "") <= 0){
+            if (p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Detail", p_sBranchCd, "") <= 0){
                 if (!p_bWithParent) p_oNautilus.rollbackTrans();
                 setMessage(p_oNautilus.getMessage());
                 return false;
@@ -685,9 +768,6 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
 
             String lsSQL = "UPDATE " + p_oMaster.getTableName() + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_POSTED +
-                                ", sPostedxx = " + SQLUtil.toSQL((String) p_oNautilus.getUserInfo("sUserIDxx")) +
-                                ", dPostedxx = " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
-                                ", sModified = " + SQLUtil.toSQL((String) p_oNautilus.getUserInfo("sUserIDxx")) +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
@@ -710,49 +790,43 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
     public ArrayList<Temp_Transactions> TempTransactions() {
         return p_oTemp;
     }
-
-    @Override
-    public JSONObject Search(Enum foType, String fsValue, String fsKey, String fsFilter, int fnMaxRow, boolean fbExact) {
-        JSONObject loJSON = new JSONObject();
+    
+    public JSONObject searchBranchInventory(String fsKey, Object foValue, boolean fbExact){
+        p_oSearchItem.setKey(fsKey);
+        p_oSearchItem.setValue(foValue);
+        p_oSearchItem.setExact(fbExact);
         
-        if (p_oInventory == null){
-            loJSON.put("result", "error");
-            loJSON.put("message", "Inventory object is not set.");
-            return loJSON;
-        }
-        
-        if (p_nEditMode != EditMode.ADDNEW &&
-            p_nEditMode != EditMode.UPDATE){
-            loJSON.put("result", "error");
-            loJSON.put("message", "Invalid edit mode detected.");
-            return loJSON;        
-        }
-        
-        if (fsValue.isEmpty()){
-            loJSON.put("result", "error");
-            loJSON.put("message", "Search value must not be empty.");
-            return loJSON;        
-        }
-        
-        p_oInventory.Search().setKey(fsKey);
-        p_oInventory.Search().setFilter(fsFilter);
-        p_oInventory.Search().setMax(fnMaxRow);
-        p_oInventory.Search().setExact(fbExact);
-
-        return p_oInventory.Search().Search(foType, fsValue);
+        return p_oSearchItem.Search();
+    }
+    
+    public InvSearchF getSearchBranchInventory(){
+        return p_oSearchItem;
     }
     
     private String getSQ_Master(){
         return "SELECT" +
                     "  a.sTransNox" +
-                    ", a.sBranchCd" +
                     ", a.dTransact" +
                     ", a.sClientID" +
-                    ", a.sReferNox" +
-                    ", a.sRemarksx" +
-                    ", a.sSalesman" +
-                    ", a.cPaymForm" +
+                    ", a.sSerialID" +
+                    ", a.sJobDescr" +
+                    ", a.nKmReadng" +
+                    ", a.sDealerCd" +
+                    ", a.sMechanic" +
+                    ", a.sSrvcAdvs" +
+                    ", a.nContrlNo" +
+                    ", a.sWrnCpnNo" +
+                    ", a.nWrnCpnNo" +
+                    ", a.cWarranty" +
+                    ", a.sBckJobNo" +
+                    ", a.nBckJobNo" +
+                    ", a.dStartedx" +
+                    ", a.dFinished" +
+                    ", a.nLabrTotl" +
+                    ", a.nPartTotl" +
                     ", a.nTranTotl" +
+                    ", a.nLabrPaid" +
+                    ", a.nPartPaid" +
                     ", a.nVATRatex" +
                     ", a.nDiscount" +
                     ", a.nAddDiscx" +
@@ -764,35 +838,54 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     ", a.sSourceCd" +
                     ", a.cTranStat" +
                     ", a.sAprvCode" +
-                    ", a.dCreatedx" +
-                    ", b.sClientNm" +
-                    ", c.sClientNm xSalesman" +
                     ", a.dModified" +
-                " FROM Sales_Master a" +
+                    ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", IFNULL(c.sSerial01, '') xEngineNo" +
+                    ", IFNULL(c.sSerial02, '') xFrameNox" +
+                    ", IFNULL(d.sClientNm, '') xMechanic" +
+                    ", IFNULL(e.sClientNm, '') xSrvcAdvs" +
+                " FROM Job_Order_Master a" +
                     " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
-                    " LEFT JOIN Client_Master c ON a.sSalesman = c.sClientID";
+                    " LEFT JOIN Inv_Serial c ON a.sSerialID = c.sSerialID" +
+                    " LEFT JOIN Client_Master d ON a.sMechanic = d.sClientID" +
+                    " LEFT JOIN Client_Master e ON a.sSrvcAdvs = e.sClientID";
     }
     
     private String getSQ_Detail(){
         return "SELECT" +
                     "  a.sTransNox" +
-                    ", a.nEntryNox" +	
-                    ", a.sOrderNox" +
+                    ", a.nEntryNox" +
+                    ", a.sLaborCde" +
+                    ", a.nQuantity" +
+                    ", a.nUnitPrce" +
+                    ", a.nDiscount" +
+                    ", a.nAddDiscx" +
+                    ", a.sNotesxxx" +
+                    ", a.dModified" +
+                    ", IFNULL(b.sDescript, '') sLaborNme" +
+                " FROM Job_Order_Detail a" +
+                    " LEFT JOIN Labor b ON a.sLaborCde = b.sLaborCde";
+    }
+    
+    private String getSQ_Parts(){
+        return "SELECT" +
+                    "  a.sTransNox" +
+                    ", a.nEntryNox" +
                     ", a.sStockIDx" +
                     ", a.nQuantity" +
-                    ", a.nInvCostx" +	
-                    ", a.nUnitPrce" +	
-                    ", a.nDiscount" +	
-                    ", a.nAddDiscx" +	
-                    ", a.sSerialID" +
-                    ", a.cNewStock" +
-                    ", a.sNotesxxx" +
+                    ", a.nInvCostx" +
+                    ", a.nUnitPrce" +
+                    ", a.nDiscount" +
+                    ", a.nAddDiscx" +
+                    ", a.dModified" +
                     ", b.sBarCodex" +
                     ", b.sDescript" +
                     ", b.nSelPrce1" +
                     ", c.nQtyOnHnd" +
-                    ", CONCAT(b.sBrandCde, '/', b.sModelCde, '/', b.sColorCde) xOthrInfo" +
-                " FROM Sales_Detail a" +
+                    ", b.sBrandCde" + 
+                    ", b.sModelCde" +
+                    ", b.sColorCde" +
+                " FROM Job_Order_Parts a" +	
                     " LEFT JOIN Inventory b" +
                         " LEFT JOIN Inv_Master c" +
                             " ON b.sStockIDx = c.sStockIDx" +
@@ -844,8 +937,9 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
     
     private String toJSONString(){
         JSONParser loParser = new JSONParser();
-        JSONArray laMaster = new JSONArray();
-        JSONArray laDetail = new JSONArray();
+        JSONArray laMaster;
+        JSONArray laDetail;
+        JSONArray laPartsx;
         JSONObject loMaster;
         JSONObject loJSON;
 
@@ -856,10 +950,14 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             
             lsValue = MiscUtil.RS2JSONi(p_oDetail).toJSONString();
             laDetail = (JSONArray) loParser.parse(lsValue);
+            
+            lsValue = MiscUtil.RS2JSONi(p_oPartsx).toJSONString();
+            laPartsx = (JSONArray) loParser.parse(lsValue);
  
             loJSON = new JSONObject();
             loJSON.put("master", loMaster);
             loJSON.put("detail", laDetail);
+            loJSON.put("parts", laPartsx);
             
             return loJSON.toJSONString();
         } catch (ParseException ex) {
@@ -879,6 +977,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         JSONObject loJSON;
         JSONObject loMaster;
         JSONArray laDetail;
+        JSONArray laPartsx;
         
         try {
             String lsSQL;
@@ -900,9 +999,17 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
             p_oDetail.populate(loRS);
             MiscUtil.close(loRS);
             
+            //create empty parts record
+            lsSQL = MiscUtil.addCondition(getSQ_Parts(), "0=1");
+            loRS = p_oNautilus.executeQuery(lsSQL);
+            p_oPartsx = factory.createCachedRowSet();
+            p_oPartsx.populate(loRS);
+            MiscUtil.close(loRS);
+            
             loJSON = (JSONObject) loParser.parse(fsPayloadx);
             loMaster = (JSONObject) loJSON.get("master");
             laDetail = (JSONArray) loJSON.get("detail");
+            laPartsx = (JSONArray) loJSON.get("parts");
             
             int lnCtr;
             int lnRow;
@@ -939,11 +1046,25 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                 addDetail();
                 for(iterator = loDetail.keySet().iterator(); iterator.hasNext();) {
                     lsIndex = (String) iterator.next(); //string value of int
-                    lnKey = Integer.valueOf(lsIndex); //string to in
-                    lsKey = p_oDetail.getMetaData().getColumnLabel(lnKey); //int to metadata
+                    lnKey = Integer.valueOf(lsIndex); //string to int
                     p_oDetail.absolute(lnRow);
                     p_oDetail.updateObject(lnKey, loDetail.get(lsIndex));
                     p_oDetail.updateRow();
+                }
+                lnRow++;
+            }
+            
+            lnRow = 1;
+            for(lnCtr = 0; lnCtr <= laPartsx.size()-1; lnCtr++){
+                JSONObject loDetail = (JSONObject) laPartsx.get(lnCtr);
+
+                addDetail();
+                for(iterator = loDetail.keySet().iterator(); iterator.hasNext();) {
+                    lsIndex = (String) iterator.next(); //string value of int
+                    lnKey = Integer.valueOf(lsIndex); //string to int
+                    p_oPartsx.absolute(lnRow);
+                    p_oPartsx.updateObject(lnKey, loDetail.get(lsIndex));
+                    p_oPartsx.updateRow();
                 }
                 lnRow++;
             }
@@ -988,7 +1109,7 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
 
             //assign values to master record
             p_oMaster.first();
-            p_oMaster.updateObject("sBranchCd", (String) p_oNautilus.getSysConfig("sBranchCd"));
+            p_oMaster.updateObject("sBranchCd", (String) p_oNautilus.getBranchConfig("sBranchCd"));
             p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
 
             String lsSQL = "SELECT dCreatedx FROM xxxTempTransactions" +
@@ -1030,17 +1151,19 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         double lnDetlTotl;
         
         double lnTranTotal = 0.00;
+        int lnRow = getItemCount();
         
-        for (int lnCtr = 0; lnCtr < p_oDetail.size(); lnCtr++){
+        for (int lnCtr = 0; lnCtr < lnRow; lnCtr++){
             lnQuantity = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQuantity")));
-            lnUnitPrce = ((Number)getDetail(lnCtr, "nUnitPrce")).doubleValue();
-            lnDiscount = ((Number)getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
-            lnAddDiscx = ((Number)getDetail(lnCtr, "nAddDiscx")).doubleValue();
+            lnUnitPrce = ((Number) getDetail(lnCtr, "nUnitPrce")).doubleValue();
+            lnDiscount = ((Number) getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
+            lnAddDiscx = ((Number) getDetail(lnCtr, "nAddDiscx")).doubleValue();
             lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) + lnAddDiscx;
             
             lnTranTotal += lnDetlTotl;
         }
         
+        p_oMaster.first();
         p_oMaster.updateObject("nTranTotl", lnTranTotal);
         p_oMaster.updateRow();
         
@@ -1055,19 +1178,14 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
         return lbSuccess;
     }
     
-    private void loadDetailByCode(int fnRow, String fsFieldNm, String fsValue) throws SQLException, ParseException{
+    private void getDetail(int fnRow, String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchBranchInventory(fsFieldNm, foValue, true);
         JSONParser loParser = new JSONParser();
-        JSONObject loJSON;
-        JSONArray loArray;
         
         switch(fsFieldNm){
-            case "sStockIDx":
-                loJSON = (JSONObject) loParser.parse(fsValue);
-                loJSON = Search(InvSearchEngine.Type.searchInvBranchComplex, (String) loJSON.get("sStockIDx"), "a.sStockIDx", "", 1, true);
-                
+            case "a.sStockIDx":
                 if ("success".equals((String) loJSON.get("result"))){
-                    loArray = (JSONArray) loJSON.get("payload");
-                    loJSON = (JSONObject) loArray.get(0);
+                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
                     
                     //check if the stock id was already exists
                     boolean lbExist = false;
@@ -1091,7 +1209,49 @@ public class NeoSales implements XMasDetTrans, XSearchRecord{
                     p_oDetail.updateObject("sDescript", (String) loJSON.get("sDescript"));
                     p_oDetail.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));
                     p_oDetail.updateObject("nInvCostx", (Number) loJSON.get("nUnitPrce"));
-                    p_oDetail.updateObject("xOthrInfo", (String) loJSON.get("sBrandCde") + "/" + (String) loJSON.get("sModelCde") + "/" + (String) loJSON.get("sColorCde"));
+                    p_oDetail.updateObject("sBrandCde", (String) loJSON.get("sBrandCde"));
+                    p_oDetail.updateObject("sModelCde", (String) loJSON.get("sModelCde"));
+                    p_oDetail.updateObject("sColorCde", (String) loJSON.get("sColorCde"));
+                    p_oDetail.updateRow();                    
+                    if (!lbExist) addDetail();
+                }
+        }
+    }
+    
+    private void getParts(int fnRow, String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchBranchInventory(fsFieldNm, foValue, true);
+        JSONParser loParser = new JSONParser();
+        
+        switch(fsFieldNm){
+            case "a.sStockIDx":
+                if ("success".equals((String) loJSON.get("result"))){
+                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                    
+                    //check if the stock id was already exists
+                    boolean lbExist = false;
+                    
+                    for (int lnCtr = 0; lnCtr <= getItemCount() - 1; lnCtr ++){
+                        p_oDetail.absolute(lnCtr + 1);
+                        if (((String) p_oDetail.getObject("sStockIDx")).equals((String) loJSON.get("sStockIDx"))){
+                            fnRow = lnCtr;
+                            lbExist = true;
+                            break;
+                        }
+                    }
+                    
+                    p_oDetail.absolute(fnRow + 1);
+                    p_oDetail.updateObject("sStockIDx", (String) loJSON.get("sStockIDx"));
+                    p_oDetail.updateObject("nInvCostx", (Number) loJSON.get("nUnitPrce"));
+                    p_oDetail.updateObject("nUnitPrce", (Number) loJSON.get("nSelPrce1"));
+                    p_oDetail.updateObject("nQuantity", Integer.parseInt(String.valueOf(p_oDetail.getObject("nQuantity"))) + 1);
+                    
+                    p_oDetail.updateObject("sBarCodex", (String) loJSON.get("sBarCodex"));
+                    p_oDetail.updateObject("sDescript", (String) loJSON.get("sDescript"));
+                    p_oDetail.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));
+                    p_oDetail.updateObject("nInvCostx", (Number) loJSON.get("nUnitPrce"));
+                    p_oDetail.updateObject("sBrandCde", (String) loJSON.get("sBrandCde"));
+                    p_oDetail.updateObject("sModelCde", (String) loJSON.get("sModelCde"));
+                    p_oDetail.updateObject("sColorCde", (String) loJSON.get("sColorCde"));
                     p_oDetail.updateRow();                    
                     if (!lbExist) addDetail();
                 }
