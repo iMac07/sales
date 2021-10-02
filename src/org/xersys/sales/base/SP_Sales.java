@@ -22,7 +22,6 @@ import org.xersys.commander.util.CommonUtil;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
-import org.xersys.inventory.base.Inventory;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 
@@ -31,8 +30,6 @@ public class SP_Sales implements XMasDetTrans{
     
     private XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
-    
-    private Inventory p_oInventory;
     
     private boolean p_bSaveToDisk;
     private boolean p_bWithParent;
@@ -57,8 +54,6 @@ public class SP_Sales implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
-        p_oInventory = new Inventory(p_oNautilus);
-        
         p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         
         loadTempTransactions();
@@ -70,8 +65,7 @@ public class SP_Sales implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nTranStat = fnTranStat;
         p_nEditMode = EditMode.UNKNOWN;
-        
-        p_oInventory = new Inventory(p_oNautilus);
+
         loadTempTransactions();
     }
     

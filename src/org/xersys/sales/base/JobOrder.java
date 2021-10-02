@@ -32,8 +32,6 @@ public class JobOrder implements XMasDetTrans{
     private XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
     
-    private Inventory p_oInventory;
-    
     private boolean p_bSaveToDisk;
     private boolean p_bWithParent;
     
@@ -58,8 +56,6 @@ public class JobOrder implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
-        p_oInventory = new Inventory(p_oNautilus);
-        
         p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         
         loadTempTransactions();
@@ -71,8 +67,7 @@ public class JobOrder implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nTranStat = fnTranStat;
         p_nEditMode = EditMode.UNKNOWN;
-        
-        p_oInventory = new Inventory(p_oNautilus);
+
         loadTempTransactions();
     }
     
