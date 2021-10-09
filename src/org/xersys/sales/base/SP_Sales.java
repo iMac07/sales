@@ -22,6 +22,7 @@ import org.xersys.commander.util.CommonUtil;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
+import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 
@@ -355,6 +356,8 @@ public class SP_Sales implements XMasDetTrans{
     public boolean SaveTransaction(boolean fbConfirmed) {
         System.out.println(this.getClass().getSimpleName() + ".SaveTransaction()");
         
+        setMessage("");
+        
         if (p_nEditMode != EditMode.ADDNEW &&
             p_nEditMode != EditMode.UPDATE){
             System.err.println("Transaction is not on update mode.");
@@ -416,17 +419,19 @@ public class SP_Sales implements XMasDetTrans{
                 return false;
             }
             
-            if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Master", p_sBranchCd, "") <= 0){
+            if (p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Master", p_sBranchCd, "") <= 0){
                 if(!p_oNautilus.getMessage().isEmpty())
                     setMessage(p_oNautilus.getMessage());
                 else
                     setMessage("No record updated");
             } 
             
+            saveInvTrans();
+            
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
             if (!p_bWithParent) {
-                if(!p_oNautilus.getMessage().isEmpty())
+                if(!getMessage().isEmpty())
                     p_oNautilus.rollbackTrans();
                 else
                     p_oNautilus.commitTrans();
@@ -1066,5 +1071,31 @@ public class SP_Sales implements XMasDetTrans{
                     if (!lbExist) addDetail();
                 }
         }
+    }
+    
+    private boolean saveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getItemCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oDetail.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oDetail.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oDetail.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.Sales(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.ADDNEW)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
     }
 }
