@@ -27,11 +27,11 @@ import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 import org.xersys.parameters.search.ParamSearchF;
 
-public class JobOrder implements XMasDetTrans{
+public class JobEstimate implements XMasDetTrans{
     private final String SOURCE_CODE = "JO";
-    private final String MASTER_TABLE = "Job_Order_Master";
-    private final String DETAIL_TABLE = "Job_Order_Detail";
-    private final String PARTS_TABLE = "Job_Order_Parts";
+    private final String MASTER_TABLE = "Job_Estimate_Master";
+    private final String DETAIL_TABLE = "Job_Estimate_Detail";
+    private final String PARTS_TABLE = "Job_Estimate_Parts";
     
     private final XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
@@ -55,12 +55,12 @@ public class JobOrder implements XMasDetTrans{
     private InvSearchF p_oParts;
     private InvSearchF p_oSerial;
     private ClientSearch p_oClient;
-    private ClientSearch p_oMechanic;
     private ClientSearch p_oAdvisor;
     private ParamSearchF p_oMCDealer;
     private ParamSearchF p_oLabor;   
+    private ParamSearchF p_oTerm;
 
-    public JobOrder(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
+    public JobEstimate(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
@@ -69,7 +69,6 @@ public class JobOrder implements XMasDetTrans{
         p_oParts = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         p_oSerial = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchMCSerial);
         p_oClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchClient);
-        p_oMechanic = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchMechanic);
         p_oAdvisor = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchServiceAdvisor);
         p_oMCDealer = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchMCDealer);
         p_oLabor = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchLabor);
@@ -77,7 +76,7 @@ public class JobOrder implements XMasDetTrans{
         loadTempTransactions();
     }
     
-    public JobOrder(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
+    public JobEstimate(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
@@ -87,7 +86,6 @@ public class JobOrder implements XMasDetTrans{
         p_oParts = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         p_oSerial = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchMCSerial);
         p_oClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchClient);
-        p_oMechanic = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchMechanic);
         p_oAdvisor = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchServiceAdvisor);
         p_oMCDealer = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchMCDealer);
         p_oLabor = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchLabor);
@@ -118,15 +116,6 @@ public class JobOrder implements XMasDetTrans{
             
             switch (fsFieldNm){
                 case "dTransact":
-                case "dStartedx":
-                case "dFinished":
-                    if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_TIMESTAMP))
-                        p_oMaster.setObject(fsFieldNm, foValue);
-                    else 
-                        p_oMaster.setObject(fsFieldNm, p_oNautilus.getServerDate());
-                    
-                    p_oMaster.updateRow();
-                    break;
                 case "dDueDatex":
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_SHORT_DATE))
                         p_oMaster.setObject(fsFieldNm, foValue);
@@ -135,16 +124,9 @@ public class JobOrder implements XMasDetTrans{
                     
                     p_oMaster.updateRow();
                     break;
-                case "nLabrTotl":
-                case "nPartTotl":
+                case "nLabrDisc":
+                case "nPartDisc":
                 case "nTranTotl":
-                case "nLabrPaid":
-                case "nPartPaid":
-                case "nVATRatex":
-                case "nDiscount":
-                case "nAddDiscx":
-                case "nFreightx":
-                case "nAmtPaidx":
                     if (StringUtil.isNumeric(String.valueOf(foValue)))
                         p_oMaster.updateObject(fsFieldNm, foValue);
                     else
@@ -157,6 +139,7 @@ public class JobOrder implements XMasDetTrans{
                 case "sDealerCd":
                 case "sMechanic":
                 case "sSrvcAdvs":
+                case "sTermCode":
                     getMaster(fsFieldNm, (String) foValue);
                     break;
                 default:
@@ -515,7 +498,7 @@ public class JobOrder implements XMasDetTrans{
         
         if (p_nEditMode != EditMode.ADDNEW &&
             p_nEditMode != EditMode.UPDATE){
-            System.err.println("Transaction is not on update mode.");
+            setMessage("Transaction is not on update mode.");
             return false;
         }
         
@@ -586,7 +569,7 @@ public class JobOrder implements XMasDetTrans{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "xClientNm;xEngineNo;xFrameNox;xMechanic;xSrvcAdvs");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "Job_Order_Master", "xClientNm;xEngineNo;xFrameNox;xTermName;xSrvcAdvs");
             } else { //old record
             }
             
@@ -671,9 +654,7 @@ public class JobOrder implements XMasDetTrans{
             p_oPartsx.populate(loRS);
             MiscUtil.close(loRS);
             
-            if (p_oMaster.size() == 1) {                
-                addParts();
-            
+            if (p_oMaster.size() == 1) {                            
                 p_nEditMode  = EditMode.READY;
                 return true;
             }
@@ -932,18 +913,6 @@ public class JobOrder implements XMasDetTrans{
         return p_oClient;
     }
     
-    public JSONObject searchMechanic(String fsKey, Object foValue, boolean fbExact){
-        p_oMechanic.setKey(fsKey);
-        p_oMechanic.setValue(foValue);
-        p_oMechanic.setExact(fbExact);
-        
-        return p_oMechanic.Search();
-    }
-    
-    public ClientSearch getSearchMechanic(){
-        return p_oMechanic;
-    }
-    
     public JSONObject searchAdvisor(String fsKey, Object foValue, boolean fbExact){
         p_oAdvisor.setKey(fsKey);
         p_oAdvisor.setValue(foValue);
@@ -954,6 +923,18 @@ public class JobOrder implements XMasDetTrans{
     
     public ClientSearch getSearchAdvisor(){
         return p_oAdvisor;
+    }
+    
+    public JSONObject searchTerm(String fsKey, Object foValue, boolean fbExact){
+        p_oTerm.setKey(fsKey);
+        p_oTerm.setValue(foValue);
+        p_oTerm.setExact(fbExact);
+        
+        return p_oTerm.Search();
+    }
+    
+    public ParamSearchF getTerm(){
+        return p_oTerm;
     }
     
     public JSONObject searchMCDealer(String fsKey, Object foValue, boolean fbExact){
@@ -975,48 +956,28 @@ public class JobOrder implements XMasDetTrans{
                     ", a.sClientID" +
                     ", a.sSerialID" +
                     ", a.sJobDescr" +
-                    ", a.nKmReadng" +
                     ", a.sDealerCd" +
-                    ", a.sMechanic" +
                     ", a.sSrvcAdvs" +
-                    ", a.nContrlNo" +
-                    ", a.sWrnCpnNo" +
-                    ", a.nWrnCpnNo" +
-                    ", a.cWarranty" +
-                    ", a.sBckJobNo" +
-                    ", a.nBckJobNo" +
-                    ", a.dStartedx" +
-                    ", a.dFinished" +
-                    ", a.nLabrTotl" +
-                    ", a.nPartTotl" +
+                    ", a.sLabrDisc" +
+                    ", a.sPartDisc" +
                     ", a.nTranTotl" +
-                    ", a.nLabrPaid" +
-                    ", a.nPartPaid" +
-                    ", a.nVATRatex" +
-                    ", a.nDiscount" +
-                    ", a.nAddDiscx" +
-                    ", a.nFreightx" +
-                    ", a.nAmtPaidx" +
                     ", a.sTermCode" +
                     ", a.dDueDatex" +
-                    ", a.sSourceNo" +
-                    ", a.sSourceCd" +
                     ", a.cTranStat" +
-                    ", a.sAprvCode" +
                     ", a.dCreatedx" +
                     ", a.dModified" +
                     ", IFNULL(b.sClientNm, '') xClientNm" +
                     ", IFNULL(c.sSerial01, '') xEngineNo" +
                     ", IFNULL(c.sSerial02, '') xFrameNox" +
-                    ", IFNULL(d.sClientNm, '') xMechanic" +
-                    ", IFNULL(e.sClientNm, '') xSrvcAdvs" +
-                    ", IFNULL(f.sDescript, '') xDealerNm" +
-                " FROM Job_Order_Master a" +
+                    ", IFNULL(d.sClientNm, '') xSrvcAdvs" +
+                    ", IFNULL(e.sDescript, '') xDealerNm" +
+                    ", IFNULL(f.sDescript, '') xTermName" +
+                " FROM Job_Estimate_Master a" +
                     " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
                     " LEFT JOIN Inv_Serial c ON a.sSerialID = c.sSerialID" +
-                    " LEFT JOIN Client_Master d ON a.sMechanic = d.sClientID" +
-                    " LEFT JOIN Client_Master e ON a.sSrvcAdvs = e.sClientID" +
-                    " LEFT JOIN MC_Dealers f ON a.sDealerCd ON f.sDealerCd";
+                    " LEFT JOIN Client_Master d ON a.sSrvcAdvs = d.sClientID" +
+                    " LEFT JOIN MC_Dealers e ON a.sDealerCd ON e.sDealerCd" +
+                    " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
     }
     
     private String getSQ_Detail(){
@@ -1028,10 +989,9 @@ public class JobOrder implements XMasDetTrans{
                     ", a.nUnitPrce" +
                     ", a.nDiscount" +
                     ", a.nAddDiscx" +
-                    ", a.sNotesxxx" +
                     ", a.dModified" +
                     ", IFNULL(b.sDescript, '') sLaborNme" +
-                " FROM Job_Order_Detail a" +
+                " FROM Job_Estimate_Detail a" +
                     " LEFT JOIN Labor b ON a.sLaborCde = b.sLaborCde";
     }
     
@@ -1041,7 +1001,6 @@ public class JobOrder implements XMasDetTrans{
                     ", a.nEntryNox" +
                     ", a.sStockIDx" +
                     ", a.nQuantity" +
-                    ", a.nInvCostx" +
                     ", a.nUnitPrce" +
                     ", a.nDiscount" +
                     ", a.nAddDiscx" +
@@ -1367,7 +1326,6 @@ public class JobOrder implements XMasDetTrans{
         return lbSuccess;
     }
     
-    //TODO: change to labor
     private void getDetail(int fnRow, String fsFieldNm, Object foValue) throws SQLException, ParseException{       
         JSONObject loJSON;
         JSONParser loParser = new JSONParser();
@@ -1490,19 +1448,6 @@ public class JobOrder implements XMasDetTrans{
                     
                     if (p_oListener != null) p_oListener.MasterRetreive("xDealerNm", getMaster("xDealerNm"));
                 }
-            case "sMechanic":
-                loJSON = searchMechanic("a.sClientID", foValue, true);
-                
-                if ("success".equals((String) loJSON.get("result"))){
-                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
-                    
-                    p_oMaster.first();
-                    p_oMaster.updateObject("sMechanic", (String) loJSON.get("sClientID"));
-                    p_oMaster.updateObject("xMechanic", (String) loJSON.get("sClientNm"));
-                    p_oMaster.updateRow();
-                    
-                    if (p_oListener != null) p_oListener.MasterRetreive("xMechanic", getMaster("xMechanic"));
-                }
             case "sSrvcAdvs":
                 loJSON = searchAdvisor("a.sClientID", foValue, true);
                 
@@ -1515,6 +1460,19 @@ public class JobOrder implements XMasDetTrans{
                     p_oMaster.updateRow();
                     
                     if (p_oListener != null) p_oListener.MasterRetreive("xSrvcAdvs", getMaster("xSrvcAdvs"));
+                }
+            case "sTermCode":
+                loJSON = searchTerm("sTermCode", foValue, true);
+                
+                if ("success".equals((String) loJSON.get("result"))){
+                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                    
+                    p_oMaster.first();
+                    p_oMaster.updateObject("sTermCode", (String) loJSON.get("sTermCode"));
+                    p_oMaster.updateObject("xTermName", (String) loJSON.get("sDescript"));
+                    p_oMaster.updateRow();
+                    
+                    if (p_oListener != null) p_oListener.MasterRetreive("xTermName", getMaster("xTermName"));
                 }
         }
     }
