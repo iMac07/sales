@@ -388,6 +388,7 @@ public class SalesSearch implements iSearch{
             case searchSPSales:
                 _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Part No.");
                 _filter_list.add("IFNULL(c.sClientNm, '')"); _filter_description.add("Brand Code");
+                _filter_list.add("a.cTranStat"); _filter_description.add("Status");
                 
                 _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
                 _fields.add("sRemarksx"); _fields_descript.add("Remarks");
@@ -426,6 +427,7 @@ public class SalesSearch implements iSearch{
 	            ", a.nAmtPaidx" +
 	            ", IFNULL(b.sClientNm, '') xClientNm" +
 	            ", IFNULL(c.sClientNm, '') xSalesman" +
+                    ", a.cTranStat" +
 	        " FROM SP_Sales_Master a" +
 	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
 	            " LEFT JOIN Client_Master c ON a.sSalesman = b.sClientID";
