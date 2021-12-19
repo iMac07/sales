@@ -330,6 +330,8 @@ public class SalesSearch implements iSearch{
         if (null != _search_type)switch (_search_type) {
             case searchSPSales:
                 lsSQL = getSQ_Sales(); break;
+            case searchJobEstimate:
+                lsSQL = getSQ_Job_Estimate(); break;
             default:
                 break;
         }
@@ -397,7 +399,18 @@ public class SalesSearch implements iSearch{
                 _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 _fields.add("xSalesman"); _fields_descript.add("Salesman");
                 break;
-            
+            case searchJobEstimate:
+                _filter_list.add("a.sTransNox"); _filter_description.add("Trans. No.");
+                _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Client");
+                _filter_list.add("a.cTranStat"); _filter_description.add("Status");
+                
+                _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
+                _fields.add("xClientNm"); _fields_descript.add("Client");
+                _fields.add("dTransact"); _fields_descript.add("Date");
+                _fields.add("nTranTotl"); _fields_descript.add("Total");
+                _fields.add("xEngineNo"); _fields_descript.add("Engine No.");
+                _fields.add("xFrameNox"); _fields_descript.add("Frame No.");
+                break;
             default:
                 break;
         }
@@ -434,8 +447,28 @@ public class SalesSearch implements iSearch{
 
     }
     
+    private String getSQ_Job_Estimate(){
+        return "SELECT" +
+                    "  a.sTransNox" +
+                    ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+                    ", a.nTranTotl" +
+                    ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", IFNULL(c.sSerial01, '') xEngineNo" +
+                    ", IFNULL(c.sSerial02, '') xFrameNox" +
+                    ", IFNULL(d.sClientNm, '') xSrvcAdvs" +
+                    ", IFNULL(e.sDescript, '') xDealerNm" +
+                    ", IFNULL(f.sDescript, '') xTermName" +
+                " FROM Job_Estimate_Master a" +
+                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
+                    " LEFT JOIN Inv_Serial c ON a.sSerialID = c.sSerialID" +
+                    " LEFT JOIN Client_Master d ON a.sSrvcAdvs = d.sClientID" +
+                    " LEFT JOIN MC_Dealers e ON a.sDealerCd = e.sDealerCd" +
+                    " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
+    }
+    
     //let outside objects can call this variable without initializing the class.
     public static enum SearchType{
-        searchSPSales
+        searchSPSales,
+        searchJobEstimate
     }
 }

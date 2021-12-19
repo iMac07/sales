@@ -948,18 +948,28 @@ public class SP_Sales implements XMasDetTrans{
     private boolean isEntryOK(){
         try {
             //delete the last detail record if stock id
-            int lnCtr = getItemCount();
+            int lnRow = getItemCount();
 
-            p_oDetail.absolute(lnCtr);
+            p_oDetail.absolute(lnRow);
             if ("".equals((String) p_oDetail.getObject("sStockIDx"))){
                 p_oDetail.deleteRow();
             }
+            
+            lnRow = getItemCount();
 
             //validate if there is a detail record
-            if (getItemCount() <= 0) {
+            if (lnRow <= 0) {
                 setMessage("There is no item in this transaction");
                 addDetail(); //add detail to prevent error on the next attempt of saving
                 return false;
+            }
+            
+            //check if there is an item with no on hand
+            for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
+                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
+                    setMessage("Some item has on hand inventory.");
+                    return false;
+                }
             }
 
             //assign values to master record
