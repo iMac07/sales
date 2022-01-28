@@ -332,6 +332,8 @@ public class SalesSearch implements iSearch{
                 lsSQL = getSQ_Sales(); break;
             case searchJobEstimate:
                 lsSQL = getSQ_Job_Estimate(); break;
+            case searchJobOrder:
+                lsSQL = getSQ_Job_Order(); break;
             default:
                 break;
         }
@@ -400,6 +402,7 @@ public class SalesSearch implements iSearch{
                 _fields.add("xSalesman"); _fields_descript.add("Salesman");
                 break;
             case searchJobEstimate:
+            case searchJobOrder:
                 _filter_list.add("a.sTransNox"); _filter_description.add("Trans. No.");
                 _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Client");
                 _filter_list.add("a.cTranStat"); _filter_description.add("Status");
@@ -466,9 +469,29 @@ public class SalesSearch implements iSearch{
                     " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
     }
     
+    private String getSQ_Job_Order(){
+        return "SELECT" +
+                    "  a.sTransNox" +
+                    ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+                    ", a.nTranTotl" +
+                    ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", IFNULL(c.sSerial01, '') xEngineNo" +
+                    ", IFNULL(c.sSerial02, '') xFrameNox" +
+                    ", IFNULL(d.sClientNm, '') xSrvcAdvs" +
+                    ", IFNULL(e.sDescript, '') xDealerNm" +
+                    ", IFNULL(f.sDescript, '') xTermName" +
+                " FROM Job_Order_Master a" +
+                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
+                    " LEFT JOIN Inv_Serial c ON a.sSerialID = c.sSerialID" +
+                    " LEFT JOIN Client_Master d ON a.sSrvcAdvs = d.sClientID" +
+                    " LEFT JOIN MC_Dealers e ON a.sDealerCd = e.sDealerCd" +
+                    " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
+    }
+    
     //let outside objects can call this variable without initializing the class.
     public static enum SearchType{
         searchSPSales,
-        searchJobEstimate
+        searchJobEstimate,
+        searchJobOrder
     }
 }
