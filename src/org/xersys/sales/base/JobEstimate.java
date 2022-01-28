@@ -76,6 +76,7 @@ public class JobEstimate implements XMasDetTrans{
         p_oAdvisor = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchServiceAdvisor);
         p_oMCDealer = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchMCDealer);
         p_oLabor = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchLabor);
+        p_oTerm = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchTerm);
         p_oSearchTrans = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchJobEstimate);
         
         loadTempTransactions();
@@ -94,6 +95,8 @@ public class JobEstimate implements XMasDetTrans{
         p_oAdvisor = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchServiceAdvisor);
         p_oMCDealer = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchMCDealer);
         p_oLabor = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchLabor);
+        p_oTerm = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchTerm);
+        p_oSearchTrans = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchJobEstimate);
         
         loadTempTransactions();
     }
@@ -646,9 +649,11 @@ public class JobEstimate implements XMasDetTrans{
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
             if (!p_bWithParent) {
-                if(!p_oNautilus.getMessage().isEmpty())
+                if(!p_oNautilus.getMessage().isEmpty()){
                     p_oNautilus.rollbackTrans();
-                else
+                    setMessage(p_oNautilus.getMessage());
+                    return false;
+                } else
                     p_oNautilus.commitTrans();
             }    
         } catch (SQLException ex) {
