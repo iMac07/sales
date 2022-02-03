@@ -178,7 +178,6 @@ public class SP_Sales implements XMasDetTrans{
                     
                     p_oMaster.first();
                     if (p_oListener != null) p_oListener.MasterRetreive("nTranTotl", p_oMaster.getObject("nTranTotl"));
-                    
                     break;
                 default:
                     p_oDetail.absolute(fnRow + 1);
@@ -1079,6 +1078,8 @@ public class SP_Sales implements XMasDetTrans{
                     p_oDetail.updateObject("sColorCde", (String) loJSON.get("sColorCde"));
                     p_oDetail.updateRow();                    
                     if (!lbExist) addDetail();
+                    
+                    if (p_oListener != null) p_oListener.DetailRetreive(fnRow, "", "");
                 }
         }
     }
