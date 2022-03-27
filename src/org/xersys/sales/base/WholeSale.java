@@ -30,10 +30,10 @@ import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 
-public class SP_Sales implements XMasDetTrans{
-    private final String SOURCE_CODE = "SO";
-    private final String MASTER_TABLE = "SP_Sales_Master";
-    private final String DETAIL_TABLE = "SP_Sales_Detail";
+public class WholeSale implements XMasDetTrans{
+    private final String SOURCE_CODE = "WS";
+    private final String MASTER_TABLE = "WholeSale_Master";
+    private final String DETAIL_TABLE = "WholeSale_Detail";
     
     private XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
@@ -55,21 +55,21 @@ public class SP_Sales implements XMasDetTrans{
     private ArrayList<Temp_Transactions> p_oTemp;
     
     private InvSearchF p_oSearchItem;
-    private ClientSearch p_oSearchSalesman;
+    private ClientSearch p_oSearchClient;
 
-    public SP_Sales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
+    public WholeSale(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
         p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
-        p_oSearchSalesman = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchEmployee);
+        p_oSearchClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchARClient);
         
         loadTempTransactions();
     }
     
-    public SP_Sales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
+    public WholeSale(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent, int fnTranStat){
         p_oNautilus = foNautilus;
         p_sBranchCd = fsBranchCd;
         p_bWithParent = fbWithParent;
@@ -105,11 +105,11 @@ public class SP_Sales implements XMasDetTrans{
             p_oMaster.first();
             
             switch (fnIndex){
-                case 7: //sSalesman
-                    getSalesman("a.sClientID", foValue);
+                case 4: //sClientID
+                    getClient("a.sClientID", foValue);
                     return;
                 case 3: //dTransact
-                case 22: //dCreatedx
+                case 23: //dCreatedx
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_TIMESTAMP))
                         p_oMaster.setObject(fnIndex, foValue);
                     else 
@@ -117,7 +117,7 @@ public class SP_Sales implements XMasDetTrans{
                     
                     p_oMaster.updateRow();
                     break;
-                case 16: //dDueDatex
+                case 17: //dDueDatex
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_SHORT_DATE))
                         p_oMaster.setObject(fnIndex, foValue);
                     else 
@@ -125,13 +125,11 @@ public class SP_Sales implements XMasDetTrans{
                     
                     p_oMaster.updateRow();
                     break;
-                case 8: //nTranTotl
-                case 9: //nVATAmtxx
-                case 10: //nDiscount
-                case 11: //nAddDiscx
-                case 12: //nFreightx
-                case 13: //nOthChrge
-                case 14: //dDeductnx
+                case 10: //nTranTotl
+                case 11: //nVATAmtxx
+                case 12: //nDiscount
+                case 13: //nAddDiscx
+                case 14: //nFreightx                
                 case 15: //nAmtPaidx
                     if (StringUtil.isNumeric(String.valueOf(foValue)))
                         p_oMaster.updateObject(fnIndex, foValue);
@@ -411,7 +409,7 @@ public class SP_Sales implements XMasDetTrans{
             if ("".equals((String) getMaster("sTransNox"))){ //new record
                 Connection loConn = getConnection();
 
-                p_oMaster.updateObject("sTransNox", MiscUtil.getNextCode("SP_Sales_Master", "sTransNox", true, loConn, p_sBranchCd));
+                p_oMaster.updateObject("sTransNox", MiscUtil.getNextCode(MASTER_TABLE, "sTransNox", true, loConn, p_sBranchCd));
                 p_oMaster.updateObject("dModified", p_oNautilus.getServerDate());
                 p_oMaster.updateRow();
                 
@@ -425,9 +423,9 @@ public class SP_Sales implements XMasDetTrans{
                         p_oDetail.updateObject("sTransNox", p_oMaster.getObject("sTransNox"));
                         p_oDetail.updateObject("nEntryNox", lnCtr);
                     
-                        lsSQL = MiscUtil.rowset2SQL(p_oDetail, "SP_Sales_Detail", "sBarCodex;sDescript;nSelPrce1;nQtyOnHnd;sBrandCde;sModelCde;sColorCde");
+                        lsSQL = MiscUtil.rowset2SQL(p_oDetail, DETAIL_TABLE, "sBarCodex;sDescript;nSelPrce1;nQtyOnHnd;sBrandCde;sModelCde;sColorCde");
 
-                        if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Detail", p_sBranchCd, "") <= 0){
+                        if(p_oNautilus.executeUpdate(lsSQL, DETAIL_TABLE, p_sBranchCd, "") <= 0){
                             if(!p_oNautilus.getMessage().isEmpty())
                                 setMessage(p_oNautilus.getMessage());
                             else
@@ -440,7 +438,7 @@ public class SP_Sales implements XMasDetTrans{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm;xSalesman");
             } else { //old record
             }
             
@@ -451,7 +449,7 @@ public class SP_Sales implements XMasDetTrans{
                 return false;
             }
             
-            if (p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Master", p_sBranchCd, "") <= 0){
+            if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
                 if(!p_oNautilus.getMessage().isEmpty())
                     setMessage(p_oNautilus.getMessage());
                 else
@@ -622,7 +620,7 @@ public class SP_Sales implements XMasDetTrans{
                 return false;
             }
 
-            String lsSQL = "UPDATE " + MASTER_TABLE+ " SET" +
+            String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_CANCELLED +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
@@ -679,7 +677,7 @@ public class SP_Sales implements XMasDetTrans{
             lsSQL = "DELETE FROM " + p_oDetail.getTableName() +
                     " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
-            if (p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Detail", p_sBranchCd, "") <= 0){
+            if (p_oNautilus.executeUpdate(lsSQL, DETAIL_TABLE, p_sBranchCd, "") <= 0){
                 if (!p_bWithParent) p_oNautilus.rollbackTrans();
                 setMessage(p_oNautilus.getMessage());
                 return false;
@@ -758,16 +756,16 @@ public class SP_Sales implements XMasDetTrans{
         return p_oSearchItem;
     }
     
-    public JSONObject searchSalesman(String fsKey, Object foValue, boolean fbExact){
-        p_oSearchSalesman.setKey(fsKey);
-        p_oSearchSalesman.setValue(foValue);
-        p_oSearchSalesman.setExact(fbExact);
+    public JSONObject searchClient(String fsKey, Object foValue, boolean fbExact){
+        p_oSearchClient.setKey(fsKey);
+        p_oSearchClient.setValue(foValue);
+        p_oSearchClient.setExact(fbExact);
         
-        return p_oSearchSalesman.Search();
+        return p_oSearchClient.Search();
     }
     
-    public ClientSearch getSearchSalesman(){
-        return p_oSearchSalesman;
+    public ClientSearch getSearchClient(){
+        return p_oSearchClient;
     }
     
     private String getSQ_Master(){
@@ -775,44 +773,43 @@ public class SP_Sales implements XMasDetTrans{
                     "  a.sTransNox" +
                     ", a.sBranchCd" +
                     ", a.dTransact" +
-                    ", a.sReferNox" +
                     ", a.sClientID" +
+                    ", a.sShipIDxx" +
+                    ", a.sShipCntc" +
+                    ", a.sReferNox" +
                     ", a.sRemarksx" +
-                    ", a.sSalesman" +
+                    ", a.cPaymForm" +
                     ", a.nTranTotl" +
-                    ", a.nVATAmtxx" +
+                    ", a.nVATRatex" +
                     ", a.nDiscount" +
                     ", a.nAddDiscx" +
                     ", a.nFreightx" +
-                    ", a.nOthChrge" +
-                    ", a.nDeductnx" +
                     ", a.nAmtPaidx" +
-                    ", a.dDueDatex" +
                     ", a.sTermCode" +
+                    ", a.dDueDatex" +
                     ", a.sSourceNo" +
                     ", a.sSourceCd" +
                     ", a.cTranStat" +
-                    ", a.sApprvlCd" +
+                    ", a.nPostStat" +
+                    ", a.sAprvCode" +
                     ", a.dCreatedx" +
                     ", a.dModified" +
                     ", b.sClientNm" +
-                    ", c.sClientNm xSalesman" +
-                " FROM SP_Sales_Master a" +
-                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
-                    " LEFT JOIN Client_Master c ON a.sSalesman = c.sClientID";
+                " FROM " + MASTER_TABLE + " a" +
+                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
     }
     
     private String getSQ_Detail(){
         return "SELECT" +
                     "  a.sTransNox" +
-                    ", a.nEntryNox" +	
+                    ", a.nEntryNox" +
                     ", a.sOrderNox" +
                     ", a.sStockIDx" +
                     ", a.nQuantity" +
-                    ", a.nInvCostx" +	
-                    ", a.nUnitPrce" +	
-                    ", a.nDiscount" +	
-                    ", a.nAddDiscx" +	
+                    ", a.nInvCostx" +
+                    ", a.nUnitPrce" +
+                    ", a.nDiscount" +
+                    ", a.nAddDiscx" +
                     ", a.sNotesxxx" +
                     ", b.sBarCodex" +
                     ", b.sDescript" +
@@ -821,7 +818,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", b.sBrandCde" + 
                     ", b.sModelCde" +
                     ", b.sColorCde" +
-                " FROM SP_Sales_Detail a" +
+                " FROM " + DETAIL_TABLE + " a" +
                     " LEFT JOIN Inventory b" +
                         " LEFT JOIN Inv_Master c" +
                             " ON b.sStockIDx = c.sStockIDx" +
@@ -845,7 +842,7 @@ public class SP_Sales implements XMasDetTrans{
         }
     }
     
-    public void loadTempTransactions(){
+    private void loadTempTransactions(){
         String lsSQL = "SELECT * FROM xxxTempTransactions" +
                         " WHERE cRecdStat = '1'" +
                             " AND sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE);
@@ -1149,9 +1146,9 @@ public class SP_Sales implements XMasDetTrans{
                 loTrans.setMaster(lnCtr, "nQuantity", p_oDetail.getInt("nQuantity"));
             }
             
-            if (!loTrans.Sales(p_oMaster.getString("sTransNox"), 
-                                        p_oMaster.getDate("dTransact"), 
-                                        EditMode.ADDNEW)){
+            if (!loTrans.WholeSale(p_oMaster.getString("sTransNox"), 
+                                    p_oMaster.getDate("dTransact"), 
+                                    EditMode.ADDNEW)){
                 setMessage(loTrans.getMessage());
                 return false;
             }
@@ -1163,19 +1160,19 @@ public class SP_Sales implements XMasDetTrans{
         return false;
     }
     
-     private void getSalesman(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
-        JSONObject loJSON = searchSalesman(fsFieldNm, foValue, true);
+     private void getClient(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchClient(fsFieldNm, foValue, true);
         JSONParser loParser = new JSONParser();
 
         if ("success".equals((String) loJSON.get("result"))){
             loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
 
             p_oMaster.first();
-            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sSalesman"), (String) loJSON.get("sClientID"));
-            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "xSalesman"), (String) loJSON.get("sClientNm"));
+            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sClientID"), (String) loJSON.get("sClientID"));
+            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sClientNm"), (String) loJSON.get("sClientNm"));
             p_oMaster.updateRow();           
             
-            if (p_oListener != null) p_oListener.MasterRetreive("sSalesman", (String) getMaster("xSalesman"));
+            if (p_oListener != null) p_oListener.MasterRetreive("sClientID", (String) getMaster("sClientNm"));
             saveToDisk(RecordStatus.ACTIVE, "");
         }
     }

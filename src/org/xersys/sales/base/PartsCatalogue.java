@@ -25,7 +25,6 @@ public class PartsCatalogue {
     private String sSeriesID;
     
     private CachedRowSet _master;
-    private CachedRowSet _detail;
     
     public void setNautilus(XNautilus foValue){
         _nautilus = foValue;
@@ -105,7 +104,6 @@ public class PartsCatalogue {
         }
         
         _master = null;
-        _detail = null;
         
         sCategrCd = "";
         sBrandCde = "";
