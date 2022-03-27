@@ -64,6 +64,7 @@ public class JobOrder implements XMasDetTrans{
     private ParamSearchF p_oLabor;   
     private ParamSearchF p_oTerm;
     private SalesSearch p_oSearchTrans;
+    private SalesSearch p_oEstimate;
 
     public JobOrder(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
@@ -80,6 +81,7 @@ public class JobOrder implements XMasDetTrans{
         p_oLabor = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchLabor);
         p_oTerm = new ParamSearchF(p_oNautilus, ParamSearchF.SearchType.searchTerm);
         p_oSearchTrans = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchJobOrder);
+        p_oEstimate = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchJobEstimate);
         
         loadTempTransactions();
     }
@@ -972,6 +974,50 @@ public class JobOrder implements XMasDetTrans{
         p_nTranStat = fnValue;
     }
     
+    public boolean loadEstimate(String fsTransNox){
+        if (p_nEditMode != EditMode.ADDNEW){
+            setMessage("Invalid Edit Mode Detected.");
+            return false;
+        }
+        
+        JobEstimate loEstimate = new JobEstimate(p_oNautilus, p_sBranchCd, true);
+        
+        if (loEstimate.OpenTransaction(fsTransNox)){
+            setMaster("sJobDescr", (String) loEstimate.getMaster("sJobDescr"));
+            setMaster("sSourceNo", (String) loEstimate.getMaster("sTransNox"));
+            setMaster("sSourceCd", "JEst");
+            
+            setMaster("sClientID", (String) loEstimate.getMaster("sClientID"));
+            setMaster("sSerialID", (String) loEstimate.getMaster("sSerialID"));
+            setMaster("sDealerCd", (String) loEstimate.getMaster("sDealerCd"));
+            setMaster("sSrvcAdvs", (String) loEstimate.getMaster("sSrvcAdvs"));
+            setMaster("sTermCode", (String) loEstimate.getMaster("sTermCode"));
+
+            for (int lnCtr = 0; lnCtr <= loEstimate.getItemCount()-1; lnCtr++){
+                setDetail(lnCtr, "sLaborCde", (String) loEstimate.getDetail(lnCtr, "sLaborCde"));
+                setDetail(lnCtr, "nQuantity", (int) loEstimate.getDetail(lnCtr, "nQuantity"));
+                setDetail(lnCtr, "nUnitPrce", Double.valueOf(loEstimate.getDetail(lnCtr, "nUnitPrce").toString()));
+                setDetail(lnCtr, "nDiscount", Double.valueOf(loEstimate.getDetail(lnCtr, "nDiscount").toString()));
+                setDetail(lnCtr, "nAddDiscx", Double.valueOf(loEstimate.getDetail(lnCtr, "nAddDiscx").toString()));
+                addDetail();
+            }
+            
+            for (int lnCtr = 0; lnCtr <= loEstimate.getPartsCount()-1; lnCtr++){
+                setParts(lnCtr, "sStockIDx", (String) loEstimate.getParts(lnCtr, "sStockIDx"));
+                setDetail(lnCtr, "nQuantity", (int) loEstimate.getParts(lnCtr, "nQuantity"));
+                setDetail(lnCtr, "nUnitPrce", Double.valueOf(loEstimate.getParts(lnCtr, "nUnitPrce").toString()));
+                setDetail(lnCtr, "nDiscount", Double.valueOf(loEstimate.getParts(lnCtr, "nDiscount").toString()));
+                setDetail(lnCtr, "nAddDiscx", Double.valueOf(loEstimate.getParts(lnCtr, "nAddDiscx").toString()));
+                addParts();
+            }
+        } else {
+            setMessage("Unable to load Job Estimate transaction.");
+            return false;
+        }
+        
+        return true;
+    }
+    
     public JSONObject searchTransaction(String fsKey, Object foValue, boolean fbExact){
         p_oSearchTrans.setKey(fsKey);
         p_oSearchTrans.setValue(foValue);
@@ -984,6 +1030,20 @@ public class JobOrder implements XMasDetTrans{
     
     public SalesSearch getSearchTransaction(){
         return p_oSearchTrans;
+    }
+    
+    public JSONObject searchEstimate(String fsKey, Object foValue, boolean fbExact){
+        p_oEstimate.setKey(fsKey);
+        p_oEstimate.setValue(foValue);
+        p_oEstimate.setExact(fbExact);
+        
+        p_oEstimate.addFilter("Status", 2);
+        
+        return p_oEstimate.Search();
+    }
+    
+    public SalesSearch getSearchEstimate(){
+        return p_oEstimate;
     }
     
     public JSONObject searchParts(String fsKey, Object foValue, boolean fbExact){
