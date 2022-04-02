@@ -6,11 +6,15 @@ import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
 import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.xersys.commander.contants.EditMode;
 import org.xersys.commander.iface.LRecordMas;
 import org.xersys.commander.iface.XNautilus;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
+import org.xersys.parameters.search.ParamSearchF;
 
 public class PartsCatalogue {
     private XNautilus _nautilus;
@@ -23,11 +27,16 @@ public class PartsCatalogue {
     private String sModelCde;
     private String sCategrCd;
     private String sSeriesID;
+    private String sSeriesNm;
+    private String sModelNme;
+    
+    private ParamSearchF p_oSeries;
     
     private CachedRowSet _master;
     
-    public void setNautilus(XNautilus foValue){
+    public PartsCatalogue(XNautilus foValue){
         _nautilus = foValue;
+        p_oSeries = new ParamSearchF(_nautilus, ParamSearchF.SearchType.searchModelSeries);
     }
     
     public void setListener(LRecordMas foValue){
@@ -58,13 +67,15 @@ public class PartsCatalogue {
         return _master.getObject(fsFieldNm);
     }
     
-    public void setMaster(String fsIndex, Object foValue){
+    public void setMaster(String fsIndex, Object foValue) throws SQLException, ParseException{
         switch (fsIndex.toLowerCase()){
             case "sbrandcde":
                 if (!sBrandCde.equals((String) foValue)){
                     sBrandCde = (String) foValue;
                     sModelCde = "";
+                    sModelNme = "";
                     sSeriesID = "";
+                    sSeriesNm = "";
                     
                     _listener.MasterRetreive("sBrandCde", sBrandCde);
                     _listener.MasterRetreive("sModelCde", "");
@@ -74,15 +85,17 @@ public class PartsCatalogue {
             case "smodelcde":
                 if (!sModelCde.equals((String) foValue)){
                     sModelCde = (String) foValue;
+                    sModelNme = "";
                     sSeriesID = "";
+                    sSeriesNm = "";
                     
                     _listener.MasterRetreive("sModelCde", sModelCde);
                 }
                 break;
             case "sseriesid":
-                sSeriesID = (String) foValue;
-                
-                _listener.MasterRetreive("sSeriesID", sSeriesID);
+                getMaster("sSeriesID", (String) foValue);
+//                sSeriesID = (String) foValue;
+//                _listener.MasterRetreive("sSeriesID", sSeriesID);
                 break;
             case "scategrcd":
                 sCategrCd = (String) foValue;
@@ -108,7 +121,9 @@ public class PartsCatalogue {
         sCategrCd = "";
         sBrandCde = "";
         sModelCde = "";
+        sModelNme = "";
         sSeriesID = "";
+        sSeriesNm = "";
         
         _edit_mode = EditMode.READY;
         return true;
@@ -129,7 +144,9 @@ public class PartsCatalogue {
         ResultSet loRS;
         String lsSQL = getSQ_Detail();
         
-        lsSQL = MiscUtil.addCondition(lsSQL, "sCategrCd = " + SQLUtil.toSQL(sCategrCd));
+        if (!sCategrCd.isEmpty()) 
+            lsSQL = MiscUtil.addCondition(lsSQL, "sCategrCd = " + SQLUtil.toSQL(sCategrCd));
+        
         lsSQL = MiscUtil.addCondition(lsSQL, "sBrandCde = " + SQLUtil.toSQL(sBrandCde));
         lsSQL = MiscUtil.addCondition(lsSQL, "sModelCde = " + SQLUtil.toSQL(sModelCde));
         lsSQL = MiscUtil.addCondition(lsSQL, "sSeriesID = " + SQLUtil.toSQL(sSeriesID));
@@ -180,6 +197,45 @@ public class PartsCatalogue {
             ex.printStackTrace();
             _message = "SQLException on " + lsProcName;
             return null;
+        }
+    }
+    
+    public JSONObject searchSeries(String fsKey, Object foValue, boolean fbExact){
+        p_oSeries.setKey(fsKey);
+        p_oSeries.setValue(foValue);
+        p_oSeries.setExact(fbExact);
+        
+        return p_oSeries.Search();
+    }
+    
+    public ParamSearchF getSearchSeries(){
+        return p_oSeries;
+    }
+    
+    private void getMaster(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON;
+        JSONParser loParser = new JSONParser();
+        
+        switch(fsFieldNm){
+            case "sSeriesID":
+                loJSON = searchSeries("a.sSeriesID", foValue, true);
+                
+                if ("success".equals((String) loJSON.get("result"))){
+                    loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                    
+                    sCategrCd = "";
+                    sBrandCde = (String) loJSON.get("sBrandCde");
+                    sModelCde = (String) loJSON.get("sModelCde");
+                    sModelNme = (String) loJSON.get("sModelNme");
+                    sSeriesID = (String) loJSON.get("sSeriesID");
+                    sSeriesNm = (String) loJSON.get("xSeriesNm");
+                    
+                    if (_listener != null) _listener.MasterRetreive("sCategrCd", sCategrCd);
+                    if (_listener != null) _listener.MasterRetreive("sBrandCde", sBrandCde);
+                    if (_listener != null) _listener.MasterRetreive("sModelCde", sModelNme);
+                    if (_listener != null) _listener.MasterRetreive("sSeriesID", sSeriesNm);
+                }
+                break;
         }
     }
     
