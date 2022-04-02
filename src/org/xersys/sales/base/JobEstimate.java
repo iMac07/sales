@@ -1474,7 +1474,7 @@ public class JobEstimate implements XMasDetTrans{
                     p_oDetail.updateObject(MiscUtil.getColumnIndex(p_oDetail, "sLaborCde"), (String) loJSON.get("sLaborCde"));
                     p_oDetail.updateObject(MiscUtil.getColumnIndex(p_oDetail, "sLaborNme"), (String) loJSON.get("sDescript"));
                     p_oDetail.updateObject(MiscUtil.getColumnIndex(p_oDetail, "nQuantity"), Integer.parseInt(String.valueOf(p_oDetail.getObject("nQuantity"))) + 1);
-                    p_oDetail.updateObject(MiscUtil.getColumnIndex(p_oDetail, "nUnitPrce"), (Number) loJSON.get("nPriceLv3"));
+                    p_oDetail.updateObject(MiscUtil.getColumnIndex(p_oDetail, "nUnitPrce"), (Number) loJSON.get("nPriceLv1"));
                     p_oDetail.updateRow();      
                     
                     if (!lbExist) addDetail();

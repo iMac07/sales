@@ -1026,6 +1026,12 @@ public class SP_Sales implements XMasDetTrans{
 
             //assign values to master record
             p_oMaster.first();
+            
+            if (p_oMaster.getString("sSalesman").equals("")){
+                setMessage("No salesman was assigned.");
+                return false;
+            }
+            
             p_oMaster.updateObject("sBranchCd", (String) p_oNautilus.getBranchConfig("sBranchCd"));
             p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
 
