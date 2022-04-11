@@ -336,6 +336,8 @@ public class SalesSearch implements iSearch{
                 lsSQL = getSQ_Job_Order(); break;
             case searchSPWholeSale:
                 lsSQL = getSQ_SPWholeSale(); break;
+            case searchCustomerOrder:
+                lsSQL = getSQ_CustomerOrder();
             default:
                 break;
         }
@@ -415,6 +417,17 @@ public class SalesSearch implements iSearch{
                 _fields.add("xClientNm"); _fields_descript.add("Client");
                 _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 _fields.add("xSalesman"); _fields_descript.add("Salesman");
+                break;
+            case searchCustomerOrder:
+                _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Part No.");
+                _filter_list.add("IFNULL(c.sClientNm, '')"); _filter_description.add("Brand Code");
+                _filter_list.add("a.cTranStat"); _filter_description.add("Status");
+                
+                _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
+                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
+                _fields.add("dTransact"); _fields_descript.add("Date");
+                _fields.add("xClientNm"); _fields_descript.add("Client");
+                _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 break;
             case searchJobEstimate:
             case searchJobOrder:
@@ -519,11 +532,27 @@ public class SalesSearch implements iSearch{
                     " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
     }
     
+    private String getSQ_CustomerOrder(){
+	return "SELECT" +
+	            "  a.sTransNox" +
+	            ", a.sBranchCd" +
+	            ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+	            ", a.sReferNox" +
+	            ", a.sRemarksx" +
+	            ", Round((a.nTranTotl + a.nFreightx) - ((a.nTranTotl * a.nDiscount / 100) + a.nAddDiscx), 2) nTranTotl" +
+	            ", a.nAmtPaidx" +
+	            ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", a.cTranStat" +
+	        " FROM SP_Sales_Order_Master a" +
+	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+    }
+    
     //let outside objects can call this variable without initializing the class.
     public static enum SearchType{
         searchSPSales,
         searchSPWholeSale,
         searchJobEstimate,
-        searchJobOrder
+        searchJobOrder,
+        searchCustomerOrder
     }
 }

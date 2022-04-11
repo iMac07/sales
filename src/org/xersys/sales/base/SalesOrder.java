@@ -31,6 +31,7 @@ import org.xersys.commander.util.StringUtil;
 import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
+import org.xersys.purchasing.base.PurchaseOrder;
 
 public class SalesOrder implements XMasDetTrans{
     private final String SOURCE_CODE = "CO";
@@ -65,7 +66,7 @@ public class SalesOrder implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
-        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
+        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchStocks);
         p_oSearchClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchClient);
         
         loadTempTransactions();
@@ -94,6 +95,10 @@ public class SalesOrder implements XMasDetTrans{
     public void setSaveToDisk(boolean fbValue) {
         p_bSaveToDisk = fbValue;
     }
+    
+    public void setTranStat(int fnValue){
+        p_nTranStat = fnValue;
+    }
 
     @Override
     public void setMaster(int fnIndex, Object foValue) {
@@ -107,7 +112,7 @@ public class SalesOrder implements XMasDetTrans{
             p_oMaster.first();
             
             switch (fnIndex){
-                case 57: //sClientID
+                case 5: //sClientID
                     getClient("a.sClientID", foValue);
                     return;
                 case 3: //dTransact
@@ -478,7 +483,7 @@ public class SalesOrder implements XMasDetTrans{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "xClientNm");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm");
             } else { //old record
             }
             
@@ -496,14 +501,15 @@ public class SalesOrder implements XMasDetTrans{
                     setMessage("No record updated");
             } 
             
-            saveInvTrans();
+            //saveInvTrans();
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
             if (!p_bWithParent) {
-                if(!getMessage().isEmpty())
+                if(!getMessage().isEmpty()){
                     p_oNautilus.rollbackTrans();
-                else
+                    return false;
+                } else
                     p_oNautilus.commitTrans();
             }    
         } catch (SQLException ex) {
@@ -552,8 +558,6 @@ public class SalesOrder implements XMasDetTrans{
             MiscUtil.close(loRS);
             
             if (p_oMaster.size() == 1) {                
-                addDetail();
-            
                 p_nEditMode  = EditMode.READY;
                 return true;
             }
@@ -781,6 +785,60 @@ public class SalesOrder implements XMasDetTrans{
         return p_oTemp;
     }
     
+    public boolean SendToPO(){
+        try {
+            if (p_nEditMode != EditMode.READY){
+                setMessage("No transaction was loaded..");
+                return false;
+            }
+
+            if (!(TransactionStatus.STATE_CLOSED).equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Transaction was still open.");
+                return false;
+            } 
+            
+            String lsSQL = "SELECT" +
+                                "  sTransNox" +
+                                ", cTranStat" +
+                            " FROM PO_Master" +
+                            " WHERE sSourceCd = 'CO'" +
+                                " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                                " AND cTranStat NOT IN ('3', '4')";
+            ResultSet loRS = p_oNautilus.executeQuery(lsSQL);
+            
+            boolean lbHasRecord = loRS.next();
+            MiscUtil.close(loRS);
+            
+            if (lbHasRecord){
+                setMessage("This customer order already has Purchase Order.");    
+                return false;
+            }
+            
+            MiscUtil.close(loRS);
+            PurchaseOrder loPurchase = new PurchaseOrder(p_oNautilus, p_sBranchCd, true);
+            loPurchase.setSaveToDisk(true);
+            
+            if (loPurchase.NewTransaction()){
+                loPurchase.setMaster("sSourceCd", SOURCE_CODE);
+                loPurchase.setMaster("sSourceNo", (String) getMaster("sTransNox"));
+                loPurchase.setMaster("sRemarksx", "Customer Order of " + (String) getMaster("xClientNm") + ".");
+                                
+                for (int lnCtr = 1; lnCtr <= getItemCount(); lnCtr++){
+                    loPurchase.setDetail(lnCtr - 1, "sStockIDx", getDetail(lnCtr - 1, "sStockIDx"));
+                    loPurchase.setDetail(lnCtr - 1, "nQuantity", getDetail(lnCtr - 1, "nQuantity"));
+                }
+            } else {
+                setMessage(loPurchase.getMessage());
+                return false;
+            }
+        } catch (SQLException e) {
+            setMessage(e.getMessage());
+            return false;
+        }
+        
+        return true;
+    }
+    
     public JSONObject searchBranchInventory(String fsKey, Object foValue, boolean fbExact){
         p_oSearchItem.setKey(fsKey);
         p_oSearchItem.setValue(foValue);
@@ -848,7 +906,7 @@ public class SalesOrder implements XMasDetTrans{
                     ", b.sBarCodex" +
                     ", b.sDescript" +
                     ", b.nSelPrce1" +
-                    ", c.nQtyOnHnd" +
+                    ", IFNULL(c.nQtyOnHnd, 0) nQtyOnHnd" +
                     ", b.sBrandCde" + 
                     ", b.sModelCde" +
                     ", b.sColorCde" +
@@ -1047,14 +1105,6 @@ public class SalesOrder implements XMasDetTrans{
                 return false;
             }
             
-            //check if there is an item with no on hand
-            for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
-                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
-                    setMessage("Some item has on hand inventory.");
-                    return false;
-                }
-            }
-
             //assign values to master record
             p_oMaster.first();
             
@@ -1155,14 +1205,12 @@ public class SalesOrder implements XMasDetTrans{
                     
                     p_oDetail.absolute(fnRow + 1);
                     p_oDetail.updateObject("sStockIDx", (String) loJSON.get("sStockIDx"));
-                    p_oDetail.updateObject("nInvCostx", (Number) loJSON.get("nUnitPrce"));
                     p_oDetail.updateObject("nUnitPrce", (Number) loJSON.get("nSelPrce1"));
-                    p_oDetail.updateObject("nQuantity", Integer.parseInt(String.valueOf(p_oDetail.getObject("nQuantity"))) + 1);
+                    p_oDetail.updateObject("nQuantity", 0);
                     
                     p_oDetail.updateObject("sBarCodex", (String) loJSON.get("sBarCodex"));
                     p_oDetail.updateObject("sDescript", (String) loJSON.get("sDescript"));
                     p_oDetail.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));
-                    p_oDetail.updateObject("nInvCostx", (Number) loJSON.get("nUnitPrce"));
                     p_oDetail.updateObject("sBrandCde", (String) loJSON.get("sBrandCde"));
                     p_oDetail.updateObject("sModelCde", (String) loJSON.get("sModelCde"));
                     p_oDetail.updateObject("sColorCde", (String) loJSON.get("sColorCde"));

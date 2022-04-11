@@ -29,6 +29,9 @@ import org.xersys.commander.util.StringUtil;
 import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
+import org.xersys.purchasing.base.PurchaseOrder;
+import org.xersys.purchasing.search.PurchasingSearch;
+import org.xersys.sales.search.SalesSearch;
 
 public class SP_Sales implements XMasDetTrans{
     private final String SOURCE_CODE = "SO";
@@ -56,6 +59,7 @@ public class SP_Sales implements XMasDetTrans{
     
     private InvSearchF p_oSearchItem;
     private ClientSearch p_oSearchSalesman;
+    private SalesSearch p_oSearchCO;
 
     public SP_Sales(XNautilus foNautilus, String fsBranchCd, boolean fbWithParent){
         p_oNautilus = foNautilus;
@@ -65,6 +69,7 @@ public class SP_Sales implements XMasDetTrans{
         
         p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         p_oSearchSalesman = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchEmployee);
+        p_oSearchCO = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchCustomerOrder);
         
         loadTempTransactions();
     }
@@ -92,6 +97,10 @@ public class SP_Sales implements XMasDetTrans{
     public void setSaveToDisk(boolean fbValue) {
         p_bSaveToDisk = fbValue;
     }
+    
+    public void setTranStat(int fnValue){
+        p_nTranStat = fnValue;
+    }
 
     @Override
     public void setMaster(int fnIndex, Object foValue) {
@@ -105,6 +114,9 @@ public class SP_Sales implements XMasDetTrans{
             p_oMaster.first();
             
             switch (fnIndex){
+                case 18: //sSourceNo
+                    getCustomerOrder("a.sTransNox", foValue);
+                    break;
                 case 7: //sSalesman
                     getSalesman("a.sClientID", foValue);
                     return;
@@ -369,8 +381,9 @@ public class SP_Sales implements XMasDetTrans{
                 lbLoad = toDTO(loTran.getString("sPayloadx"));
             }
             
+            refreshOnHand();
             computeTotal();
-        } catch (SQLException ex) {
+        } catch (SQLException | ParseException ex) {
             setMessage(ex.getMessage());
             lbLoad = false;
         } finally {
@@ -758,6 +771,20 @@ public class SP_Sales implements XMasDetTrans{
         return p_oSearchItem;
     }
     
+    public JSONObject searchCO(String fsKey, Object foValue, boolean fbExact){
+        p_oSearchCO.setKey(fsKey);
+        p_oSearchCO.setValue(foValue);
+        p_oSearchCO.setExact(fbExact);
+        
+        p_oSearchCO.addFilter("Status", 1);
+        
+        return p_oSearchCO.Search();
+    }
+    
+    public SalesSearch getSearchCO(){
+        return p_oSearchCO;
+    }
+    
     public JSONObject searchSalesman(String fsKey, Object foValue, boolean fbExact){
         p_oSearchSalesman.setKey(fsKey);
         p_oSearchSalesman.setValue(foValue);
@@ -797,7 +824,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", a.dModified" +
                     ", b.sClientNm" +
                     ", c.sClientNm xSalesman" +
-                " FROM SP_Sales_Master a" +
+                " FROM " + MASTER_TABLE + " a" +
                     " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
                     " LEFT JOIN Client_Master c ON a.sSalesman = c.sClientID";
     }
@@ -821,7 +848,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", b.sBrandCde" + 
                     ", b.sModelCde" +
                     ", b.sColorCde" +
-                " FROM SP_Sales_Detail a" +
+                " FROM " + DETAIL_TABLE + " a" +
                     " LEFT JOIN Inventory b" +
                         " LEFT JOIN Inv_Master c" +
                             " ON b.sStockIDx = c.sStockIDx" +
@@ -1016,6 +1043,8 @@ public class SP_Sales implements XMasDetTrans{
                 return false;
             }
             
+            refreshOnHand();
+            
             //check if there is an item with no on hand
             for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
                 if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
@@ -1048,7 +1077,7 @@ public class SP_Sales implements XMasDetTrans{
             p_oMaster.updateRow();
 
             return true;
-        } catch (SQLException e) {
+        } catch (SQLException | ParseException e) {
             e.printStackTrace();
             setMessage(e.getMessage());
             return false;
@@ -1185,4 +1214,77 @@ public class SP_Sales implements XMasDetTrans{
             saveToDisk(RecordStatus.ACTIVE, "");
         }
     }
+     
+    private void getCustomerOrder(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchCO(fsFieldNm, foValue, true);
+        JSONParser loParser = new JSONParser();
+
+        if ("success".equals((String) loJSON.get("result"))){
+            loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+            
+            SalesOrder loOrder = new SalesOrder(p_oNautilus, p_sBranchCd, true);
+            loOrder.setSaveToDisk(false);
+            
+            if (loOrder.OpenTransaction((String) loJSON.get("sTransNox"))){
+                //assign master
+                p_oMaster.first();
+                p_oMaster.updateObject("sBranchCd", (String) loOrder.getMaster("sBranchCd"));
+                p_oMaster.updateObject("sSourceCd", "CO");
+                p_oMaster.updateObject("sSourceNo", (String) loOrder.getMaster("sTransNox"));
+                p_oMaster.updateObject("nDiscount", Double.valueOf(String.valueOf(loOrder.getMaster("nDiscount"))));
+                p_oMaster.updateObject("nAddDiscx", Double.valueOf(String.valueOf(loOrder.getMaster("nAddDiscx"))));
+                p_oMaster.updateObject("nFreightx", Double.valueOf(String.valueOf(loOrder.getMaster("nFreightx"))));
+                p_oMaster.updateObject("sRemarksx", (String) loOrder.getMaster("sRemarksx"));
+                p_oMaster.updateRow();
+                
+                //create empty detail record
+                RowSetFactory factory = RowSetProvider.newFactory();
+                String lsSQL = MiscUtil.addCondition(getSQ_Detail(), "0=1");
+                ResultSet loRS = p_oNautilus.executeQuery(lsSQL);
+                p_oDetail = factory.createCachedRowSet();
+                p_oDetail.populate(loRS);
+                MiscUtil.close(loRS);
+                addDetail();
+            
+                //assign detail
+                int lnRow;
+                int lnCtr;
+                for (lnCtr = 0; lnCtr <= loOrder.getItemCount()-1; lnCtr++){
+                    lnRow = getItemCount() - 1;
+                    setDetail(lnRow, "sStockIDx", (String) loOrder.getDetail(lnCtr, "sStockIDx"));
+                    setDetail(lnRow, "nQuantity", Integer.parseInt(String.valueOf(loOrder.getDetail(lnCtr, "nQuantity"))));
+                    setDetail(lnRow, "nUnitPrce", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nUnitPrce"))));
+                    setDetail(lnRow, "nDiscount", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nDiscount"))));
+                    setDetail(lnRow, "nAddDiscx", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nAddDiscx"))));
+                    
+                }
+            }
+            
+            computeTotal();
+            if (p_oListener != null) p_oListener.MasterRetreive("sSourceNo", getMaster("sSourceNo"));
+            saveToDisk(RecordStatus.ACTIVE, "");
+        }
+    }
+     
+    //get the latest quantity on hand of the items
+    private void refreshOnHand() throws SQLException, ParseException{
+        JSONObject loJSON;
+        JSONParser loParser = new JSONParser();
+        
+        for (int lnCtr = 0; lnCtr <= getItemCount()-1; lnCtr++){
+            p_oDetail.absolute(lnCtr + 1);
+            
+            if (p_oDetail.getString("sStockIDx").isEmpty()) break;
+            
+            loJSON = searchBranchInventory("a.sStockIDx", p_oDetail.getString("sStockIDx"), true);
+            
+            if ("success".equals((String) loJSON.get("result"))){
+                loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                p_oDetail.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));
+                p_oDetail.updateRow();
+            }
+        }
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
+    }   
 }
