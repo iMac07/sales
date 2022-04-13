@@ -1129,7 +1129,7 @@ public class JobEstimate implements XMasDetTrans{
         }
     }
     
-    private void loadTempTransactions(){
+    public void loadTempTransactions(){
         String lsSQL = "SELECT * FROM xxxTempTransactions" +
                         " WHERE cRecdStat = '1'" +
                             " AND sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE);
