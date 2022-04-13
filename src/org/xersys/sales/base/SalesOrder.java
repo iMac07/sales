@@ -485,6 +485,29 @@ public class SalesOrder implements XMasDetTrans{
                 
                 lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm");
             } else { //old record
+                //save detail
+                p_oDetail.beforeFirst();
+                while (p_oDetail.next()){
+                    if (!"".equals((String) p_oDetail.getObject("sStockIDx"))){                    
+                        lsSQL = MiscUtil.rowset2SQL(p_oDetail, 
+                                    DETAIL_TABLE, 
+                                    "sBarCodex;sDescript;nSelPrce1;nQtyOnHnd;sBrandCde;sModelCde;sColorCde", 
+                                    "sTransNox = " + SQLUtil.toSQL(p_oMaster.getString("sTransNox")) +
+                                        " AND nEntryNox = " + p_oDetail.getInt("nEntryNox"));
+
+                        if (!lsSQL.isEmpty()){
+                            if(p_oNautilus.executeUpdate(lsSQL, DETAIL_TABLE, p_sBranchCd, "") <= 0){
+                                if(!p_oNautilus.getMessage().isEmpty())
+                                    setMessage(p_oNautilus.getMessage());
+                                else
+                                    setMessage("No record updated");
+
+                                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                                return false;
+                            } 
+                        }
+                    }
+                }
             }
             
             if (lsSQL.equals("")){
@@ -500,8 +523,6 @@ public class SalesOrder implements XMasDetTrans{
                 else
                     setMessage("No record updated");
             } 
-            
-            //saveInvTrans();
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
