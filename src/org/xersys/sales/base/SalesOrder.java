@@ -818,39 +818,56 @@ public class SalesOrder implements XMasDetTrans{
                 return false;
             } 
             
-            String lsSQL = "SELECT" +
-                                "  sTransNox" +
-                                ", cTranStat" +
-                            " FROM PO_Master" +
-                            " WHERE sSourceCd = 'CO'" +
-                                " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
-                                " AND cTranStat NOT IN ('3', '4')";
-            ResultSet loRS = p_oNautilus.executeQuery(lsSQL);
-            
-            boolean lbHasRecord = loRS.next();
-            MiscUtil.close(loRS);
-            
-            if (lbHasRecord){
-                setMessage("This customer order already has Purchase Order.");    
-                return false;
+//            String lsSQL = "SELECT" +
+//                                "  sTransNox" +
+//                                ", cTranStat" +
+//                            " FROM PO_Master" +
+//                            " WHERE sSourceCd = 'CO'" +
+//                                " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+//                                " AND cTranStat NOT IN ('3', '4')";
+//            ResultSet loRS = p_oNautilus.executeQuery(lsSQL);
+//            
+//            boolean lbHasRecord = loRS.next();
+//            MiscUtil.close(loRS);
+//            
+//            if (lbHasRecord){
+//                setMessage("This customer order already has Purchase Order.");    
+//                return false;
+//            }
+//            
+//            MiscUtil.close(loRS);
+
+            //check if detail has different brands
+            String lsBrandCde = "";
+            for (int lnCtr = 1; lnCtr <= getItemCount(); lnCtr++){
+                if (!lsBrandCde.contains((String)getDetail(lnCtr - 1, "sBrandCde"))){
+                    lsBrandCde += (String)getDetail(lnCtr - 1, "sBrandCde") + ";";
+                }
             }
             
-            MiscUtil.close(loRS);
+            lsBrandCde = lsBrandCde.substring(0, lsBrandCde.length() -1);
+            
             PurchaseOrder loPurchase = new PurchaseOrder(p_oNautilus, p_sBranchCd, true);
             loPurchase.setSaveToDisk(true);
             
-            if (loPurchase.NewTransaction()){
-                loPurchase.setMaster("sSourceCd", SOURCE_CODE);
-                loPurchase.setMaster("sSourceNo", (String) getMaster("sTransNox"));
-                loPurchase.setMaster("sRemarksx", "Customer Order of " + (String) getMaster("xClientNm") + ".");
-                                
-                for (int lnCtr = 1; lnCtr <= getItemCount(); lnCtr++){
-                    loPurchase.setDetail(lnCtr - 1, "sStockIDx", getDetail(lnCtr - 1, "sStockIDx"));
-                    loPurchase.setDetail(lnCtr - 1, "nQuantity", getDetail(lnCtr - 1, "nQuantity"));
+            String [] lasSplit = lsBrandCde.split(";");
+            
+            for (int lnBrand = 0; lnBrand <= lasSplit.length-1; lnBrand++){
+                if (loPurchase.NewTransaction()){
+                    loPurchase.setMaster("sSourceCd", SOURCE_CODE);
+                    loPurchase.setMaster("sSourceNo", (String) getMaster("sTransNox"));
+                    loPurchase.setMaster("sRemarksx", lasSplit[lnBrand] + " Customer Order of " + (String) getMaster("xClientNm") + ".");
+
+                    for (int lnCtr = 1; lnCtr <= getItemCount(); lnCtr++){
+                        if (lasSplit[lnBrand].equals((String)getDetail(lnCtr - 1, "sBrandCde"))){
+                            loPurchase.setDetail(loPurchase.getItemCount() - 1, "sStockIDx", getDetail(lnCtr - 1, "sStockIDx"));
+                            loPurchase.setDetail(loPurchase.getItemCount() - 2, "nQuantity", getDetail(lnCtr - 1, "nQuantity"));
+                        }
+                    }
+                } else {
+                    setMessage(loPurchase.getMessage());
+                    return false;
                 }
-            } else {
-                setMessage(loPurchase.getMessage());
-                return false;
             }
         } catch (SQLException e) {
             setMessage(e.getMessage());
