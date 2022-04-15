@@ -5,8 +5,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
@@ -66,7 +64,7 @@ public class SalesOrder implements XMasDetTrans{
         p_bWithParent = fbWithParent;
         p_nEditMode = EditMode.UNKNOWN;
         
-        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchStocks);
+        p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
         p_oSearchClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchClient);
         
         loadTempTransactions();
@@ -467,6 +465,7 @@ public class SalesOrder implements XMasDetTrans{
                     if (!"".equals((String) p_oDetail.getObject("sStockIDx"))){
                         p_oDetail.updateObject("sTransNox", p_oMaster.getObject("sTransNox"));
                         p_oDetail.updateObject("nEntryNox", lnCtr);
+                        p_oDetail.updateObject("nApproved", p_oDetail.getInt("nQuantity"));
                     
                         lsSQL = MiscUtil.rowset2SQL(p_oDetail, DETAIL_TABLE, "sBarCodex;sDescript;nSelPrce1;nQtyOnHnd;sBrandCde;sModelCde;sColorCde");
 
@@ -1141,6 +1140,27 @@ public class SalesOrder implements XMasDetTrans{
                 setMessage("There is no item in this transaction");
                 addDetail(); //add detail to prevent error on the next attempt of saving
                 return false;
+            }
+            
+             //check if there is an item with no on hand
+            for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){               
+                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
+                    setMessage("Some order has no inventory on hand.");
+                    return false;
+                }
+                
+                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nReleased"))) <
+                    Integer.parseInt(String.valueOf(getDetail(lnCtr, "nIssuedxx")))){
+                    setMessage("Some order has less released quantity compared to issued quantity.");
+                    return false;
+                }
+                
+                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <
+                    Integer.parseInt(String.valueOf(getDetail(lnCtr, "nReleased"))) - 
+                        Integer.parseInt(String.valueOf(getDetail(lnCtr, "nIssuedxx")))){
+                    setMessage("Some order has less inventory on hand compared to release quantity.");
+                    return false;
+                }
             }
             
             //assign values to master record

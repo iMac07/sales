@@ -5,6 +5,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
@@ -24,6 +26,7 @@ import org.xersys.commander.util.CommonUtil;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
+import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 import org.xersys.parameters.search.ParamSearchF;
@@ -573,8 +576,9 @@ public class JobOrder implements XMasDetTrans{
                 lbLoad = toDTO(loTran.getString("sPayloadx"));
             }
             
+            refreshOnHand();
             computeTotal();
-        } catch (SQLException ex) {
+        } catch (SQLException | ParseException ex) {
             setMessage(ex.getMessage());
             lbLoad = false;
         } finally {
@@ -684,6 +688,8 @@ public class JobOrder implements XMasDetTrans{
                 else
                     setMessage("No record updated");
             } 
+            
+            saveInvTrans();
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
@@ -1483,14 +1489,35 @@ public class JobOrder implements XMasDetTrans{
                 addDetail(); //add detail to prevent error on the next attempt of saving
                 return false;
             }
+                            
+            refreshOnHand();
+            computeTotal();
             
-            lnCtr = getPartsCount();
+            int lnRow = getPartsCount();
             
-            p_oPartsx.absolute(lnCtr);
+            //check if there is an item with no on hand
+            for (lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
+                if (!"".equals((String) getParts(lnCtr, "sStockIDx"))){
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQtyOnHnd"))) <= 0){
+                        setMessage("Order has no inventory on hand.");
+                        return false;
+                    }
+
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQtyOnHnd"))) <
+                        Integer.parseInt(String.valueOf(getParts(lnCtr, "nQuantity")))){
+                        setMessage("Order has less inventory on hand compared to order.");
+                        return false;
+                    }
+                }
+            }
+            
+            lnRow = getPartsCount();
+            
+            p_oPartsx.absolute(lnRow);
             if ("".equals((String) p_oPartsx.getObject("sStockIDx"))){
                 p_oPartsx.deleteRow();
             }
-            
+
             //assign values to master record
             p_oMaster.first();
             p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
@@ -1508,7 +1535,7 @@ public class JobOrder implements XMasDetTrans{
             p_oMaster.updateRow();
 
             return true;
-        } catch (SQLException e) {
+        } catch (SQLException | ParseException e) {
             e.printStackTrace();
             setMessage(e.getMessage());
             return false;
@@ -1750,4 +1777,52 @@ public class JobOrder implements XMasDetTrans{
                 break;
         }
     }
+    
+    private boolean saveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getPartsCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oPartsx.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.ADDNEW)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
+    }
+    
+    //get the latest quantity on hand of the items
+    private void refreshOnHand() throws SQLException, ParseException{
+        JSONObject loJSON;
+        JSONParser loParser = new JSONParser();
+        
+        for (int lnCtr = 0; lnCtr <= getItemCount()-1; lnCtr++){
+            p_oPartsx.absolute(lnCtr + 1);
+            
+            if (p_oPartsx.getString("sStockIDx").isEmpty()) break;
+            
+            loJSON = searchParts("a.sStockIDx", p_oPartsx.getString("sStockIDx"), true);
+            
+            if ("success".equals((String) loJSON.get("result"))){
+                loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                p_oPartsx.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));               
+                p_oPartsx.updateRow();
+            }
+        }
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
+    }   
 }

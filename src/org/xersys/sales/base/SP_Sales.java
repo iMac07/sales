@@ -444,11 +444,30 @@ public class SP_Sales implements XMasDetTrans{
                             if(!p_oNautilus.getMessage().isEmpty())
                                 setMessage(p_oNautilus.getMessage());
                             else
-                                setMessage("No record updated");
+                                setMessage("Unable to update order detail info.");
 
                             if (!p_bWithParent) p_oNautilus.rollbackTrans();
                             return false;
                         } 
+                        
+                        if (!p_oDetail.getString("sOrderNox").isEmpty()){
+                            lsSQL = "UPDATE SP_Sales_Order_Detail SET" +
+                                    "   nIssuedxx = nIssuedxx + " + p_oDetail.getInt("nQuantity") +
+                                    " WHERE sTransNox = " + SQLUtil.toSQL(p_oDetail.getString("sOrderNox")) +
+                                        " AND sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx"));
+                            
+                            if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Detail", p_sBranchCd, "") <= 0){
+                                if(!p_oNautilus.getMessage().isEmpty())
+                                    setMessage(p_oNautilus.getMessage());
+                                else
+                                    setMessage("Unable to update Customer Order.");
+
+                                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                                return false;
+                            } 
+                        }
+                        
+                        
                         lnCtr++;
                     }
                 }
@@ -460,7 +479,7 @@ public class SP_Sales implements XMasDetTrans{
             if (lsSQL.equals("")){
                 if (!p_bWithParent) p_oNautilus.rollbackTrans();
                 
-                setMessage("No record to update");
+                setMessage("No record to update.");
                 return false;
             }
             
@@ -468,7 +487,7 @@ public class SP_Sales implements XMasDetTrans{
                 if(!p_oNautilus.getMessage().isEmpty())
                     setMessage(p_oNautilus.getMessage());
                 else
-                    setMessage("No record updated");
+                    setMessage("Unable to update order master info.");
             } 
             
             saveInvTrans();
@@ -776,7 +795,7 @@ public class SP_Sales implements XMasDetTrans{
         p_oSearchCO.setValue(foValue);
         p_oSearchCO.setExact(fbExact);
         
-        p_oSearchCO.addFilter("Status", 1);
+        p_oSearchCO.addFilter("Status", 10);
         
         return p_oSearchCO.Search();
     }
@@ -1044,11 +1063,18 @@ public class SP_Sales implements XMasDetTrans{
             }
             
             refreshOnHand();
+            computeTotal();
             
             //check if there is an item with no on hand
             for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
                 if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
-                    setMessage("Some item has on hand inventory.");
+                    setMessage("Order has no inventory on hand.");
+                    return false;
+                }
+                
+                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <
+                    Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQuantity")))){
+                    setMessage("Order has less inventory on hand compared to order.");
                     return false;
                 }
             }
@@ -1249,14 +1275,20 @@ public class SP_Sales implements XMasDetTrans{
                 //assign detail
                 int lnRow;
                 int lnCtr;
+                int lnOrder;
                 for (lnCtr = 0; lnCtr <= loOrder.getItemCount()-1; lnCtr++){
-                    lnRow = getItemCount() - 1;
-                    setDetail(lnRow, "sStockIDx", (String) loOrder.getDetail(lnCtr, "sStockIDx"));
-                    setDetail(lnRow, "nQuantity", Integer.parseInt(String.valueOf(loOrder.getDetail(lnCtr, "nQuantity"))));
-                    setDetail(lnRow, "nUnitPrce", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nUnitPrce"))));
-                    setDetail(lnRow, "nDiscount", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nDiscount"))));
-                    setDetail(lnRow, "nAddDiscx", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nAddDiscx"))));
+                    lnOrder = Integer.parseInt(String.valueOf(loOrder.getDetail(lnCtr, "nReleased"))) -
+                                Integer.parseInt(String.valueOf(loOrder.getDetail(lnCtr, "nIssuedxx")));
                     
+                    if (lnOrder > 0){
+                        lnRow = getItemCount() - 1;
+                        setDetail(lnRow, "sStockIDx", (String) loOrder.getDetail(lnCtr, "sStockIDx"));
+                        setDetail(lnRow, "sOrderNox", (String) loOrder.getMaster("sTransNox"));
+                        setDetail(lnRow, "nQuantity", lnOrder);
+                        setDetail(lnRow, "nUnitPrce", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nUnitPrce"))));
+                        setDetail(lnRow, "nDiscount", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nDiscount"))));
+                        setDetail(lnRow, "nAddDiscx", Double.valueOf(String.valueOf(loOrder.getDetail(lnCtr, "nAddDiscx"))));
+                    }                    
                 }
             }
             
@@ -1281,6 +1313,13 @@ public class SP_Sales implements XMasDetTrans{
             if ("success".equals((String) loJSON.get("result"))){
                 loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
                 p_oDetail.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));
+                
+                //if with order no, do not update the prices
+                if (p_oDetail.getString("sOrderNox").isEmpty()){
+                    p_oDetail.updateObject("nInvCostx", loJSON.get("nUnitPrce"));
+                    p_oDetail.updateObject("nUnitPrce", loJSON.get("nSelPrce1"));
+                }
+                
                 p_oDetail.updateRow();
             }
         }

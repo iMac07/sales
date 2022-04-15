@@ -359,7 +359,23 @@ public class SalesSearch implements iSearch{
         //add filter on query
         if (!_filter.isEmpty()){
             for (int lnCtr = 0; lnCtr <= _filter.size()-1; lnCtr++){
-                lsSQL = MiscUtil.addCondition(lsSQL, getFilterField(_filter.get(lnCtr)) + " LIKE " + SQLUtil.toSQL(_filter_value.get(lnCtr)));
+                if (getFilterField(_filter.get(lnCtr)).toLowerCase().contains("ctranstat")){
+                    String lsStat = String.valueOf(_filter_value.get(lnCtr));
+                    String lsCondition = "";
+        
+                    if (lsStat.length() > 1){
+                        for (int lnCtr2 = 0; lnCtr2 <= lsStat.length()-1; lnCtr2++){
+                            lsCondition += ", " + SQLUtil.toSQL(Character.toString(lsStat.charAt(lnCtr2)));
+                        }
+
+                        lsCondition = getFilterField(_filter.get(lnCtr)) + " IN (" + lsCondition.substring(2) + ")";
+                    } else 
+                        lsCondition = getFilterField(_filter.get(lnCtr)) + " = " + SQLUtil.toSQL(lsStat);
+                    
+                    lsSQL = MiscUtil.addCondition(lsSQL, lsCondition);
+                } else {
+                    lsSQL = MiscUtil.addCondition(lsSQL, getFilterField(_filter.get(lnCtr)) + " LIKE " + SQLUtil.toSQL(_filter_value.get(lnCtr)));
+                }
             }
         }
         
