@@ -5,8 +5,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
 import javax.sql.rowset.RowSetProvider;
@@ -15,9 +13,12 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.xersys.clients.search.ClientSearch;
+import org.xersys.commander.contants.AccessLevel;
 import org.xersys.commander.contants.EditMode;
 import org.xersys.commander.contants.RecordStatus;
 import org.xersys.commander.contants.TransactionStatus;
+import org.xersys.commander.contants.UserLevel;
+import org.xersys.commander.iface.LApproval;
 import org.xersys.commander.iface.LMasDetTrans;
 import org.xersys.commander.iface.LOthTrans;
 import org.xersys.commander.iface.XMasDetTrans;
@@ -41,6 +42,7 @@ public class JobOrder implements XMasDetTrans{
     private final XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
     private LOthTrans p_oOthListener;
+    private LApproval p_oApproval;
     
     private boolean p_bSaveToDisk;
     private final boolean p_bWithParent;
@@ -111,6 +113,10 @@ public class JobOrder implements XMasDetTrans{
     
     public void setOtherListener(LOthTrans foValue){
         p_oOthListener = foValue;
+    }
+    
+    public void setApprvListener(LApproval foValue){
+        p_oApproval = foValue;
     }
     
     @Override
@@ -673,6 +679,7 @@ public class JobOrder implements XMasDetTrans{
                 
                 lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "xClientNm;xEngineNo;xFrameNox;xTermName;xSrvcAdvs;xDealerNm;xMechanic");
             } else { //old record
+                System.err.println("bakit ey?");
             }
             
             if (lsSQL.equals("")){
@@ -688,8 +695,11 @@ public class JobOrder implements XMasDetTrans{
                 else
                     setMessage("No record updated");
             } 
-            
-            saveInvTrans();
+               
+            if (!saveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
@@ -856,15 +866,34 @@ public class JobOrder implements XMasDetTrans{
                 return false;
             }
 
+            //check if user is allowed
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER, 
+                    AccessLevel.SALES)){
+                setMessage(System.getProperty("sMessagex"));
+                System.setProperty("sMessagex", "");
+                return false;
+            }
+            
+            if (!p_bWithParent) p_oNautilus.beginTrans();
+            
+            if (!unsaveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
+            
             String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_CANCELLED +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
             if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
                 setMessage(p_oNautilus.getMessage());
                 return false;
             }
+            
+            if (!p_bWithParent) p_oNautilus.commitTrans();
 
             p_nEditMode  = EditMode.UNKNOWN;
 
@@ -1233,6 +1262,7 @@ public class JobOrder implements XMasDetTrans{
                     ", b.sBrandCde" + 
                     ", b.sModelCde" +
                     ", b.sColorCde" +
+                    ", a.nIssuedxx" +
                 " FROM Job_Order_Parts a" +	
                     " LEFT JOIN Inventory b" +
                         " LEFT JOIN Inv_Master c" +
@@ -1506,6 +1536,12 @@ public class JobOrder implements XMasDetTrans{
                     if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQtyOnHnd"))) <
                         Integer.parseInt(String.valueOf(getParts(lnCtr, "nQuantity")))){
                         setMessage("Order has less inventory on hand compared to order.");
+                        return false;
+                    }
+                    
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQuantity"))) !=
+                        Integer.parseInt(String.valueOf(getParts(lnCtr, "nIssuedxx")))){
+                        setMessage("Order quantity and issued quantity discrepancy detected.");
                         return false;
                     }
                 }
@@ -1793,6 +1829,32 @@ public class JobOrder implements XMasDetTrans{
             if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
                                         p_oMaster.getDate("dTransact"), 
                                         EditMode.ADDNEW)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
+    }
+    
+    private boolean unsaveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getPartsCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oPartsx.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.DELETE)){
                 setMessage(loTrans.getMessage());
                 return false;
             }

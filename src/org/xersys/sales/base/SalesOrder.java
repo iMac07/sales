@@ -482,6 +482,13 @@ public class SalesOrder implements XMasDetTrans{
                     }
                 }
                 
+                if (!saveInvTrans()){
+                    if (!p_bWithParent){
+                        p_oNautilus.rollbackTrans();
+                        return false;
+                    }
+                }
+                
                 lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm");
             } else { //old record
                 //save detail
@@ -678,7 +685,9 @@ public class SalesOrder implements XMasDetTrans{
             }
             
             //check if user is allowed
-            if (!p_oNautilus.isUserAuthorized(p_oApproval, UserLevel.MANAGER + UserLevel.SUPERVISOR, AccessLevel.PURCHASING)){
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER, 
+                    AccessLevel.SALES)){
                 setMessage(System.getProperty("sMessagex"));
                 System.setProperty("sMessagex", "");
                 return false;
@@ -721,7 +730,9 @@ public class SalesOrder implements XMasDetTrans{
             }
 
             //check if user is allowed
-            if (!p_oNautilus.isUserAuthorized(p_oApproval, UserLevel.MANAGER + UserLevel.SUPERVISOR, AccessLevel.PURCHASING)){
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER, 
+                    AccessLevel.PURCHASING)){
                 setMessage(System.getProperty("sMessagex"));
                 System.setProperty("sMessagex", "");
                 return false;
@@ -1292,7 +1303,7 @@ public class SalesOrder implements XMasDetTrans{
                 loTrans.setMaster(lnCtr, "nQuantity", p_oDetail.getInt("nQuantity"));
             }
             
-            if (!loTrans.Sales(p_oMaster.getString("sTransNox"), 
+            if (!loTrans.RetailOrder(p_oMaster.getString("sTransNox"), 
                                         p_oMaster.getDate("dTransact"), 
                                         EditMode.ADDNEW)){
                 setMessage(loTrans.getMessage());

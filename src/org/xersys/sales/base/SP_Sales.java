@@ -448,28 +448,15 @@ public class SP_Sales implements XMasDetTrans{
 
                             if (!p_bWithParent) p_oNautilus.rollbackTrans();
                             return false;
-                        } 
-                        
-                        if (!p_oDetail.getString("sOrderNox").isEmpty()){
-                            lsSQL = "UPDATE SP_Sales_Order_Detail SET" +
-                                    "   nIssuedxx = nIssuedxx + " + p_oDetail.getInt("nQuantity") +
-                                    " WHERE sTransNox = " + SQLUtil.toSQL(p_oDetail.getString("sOrderNox")) +
-                                        " AND sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx"));
-                            
-                            if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Detail", p_sBranchCd, "") <= 0){
-                                if(!p_oNautilus.getMessage().isEmpty())
-                                    setMessage(p_oNautilus.getMessage());
-                                else
-                                    setMessage("Unable to update Customer Order.");
-
-                                if (!p_bWithParent) p_oNautilus.rollbackTrans();
-                                return false;
-                            } 
-                        }
-                        
-                        
+                        }                         
                         lnCtr++;
                     }
+                }
+                
+                //issue customer order
+                if (!issueOrder()){
+                    if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                    return false;
                 }
                 
                 lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman");
@@ -490,7 +477,11 @@ public class SP_Sales implements XMasDetTrans{
                     setMessage("Unable to update order master info.");
             } 
             
-            saveInvTrans();
+            //save inventory transactios
+            if (!saveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
@@ -546,8 +537,6 @@ public class SP_Sales implements XMasDetTrans{
             MiscUtil.close(loRS);
             
             if (p_oMaster.size() == 1) {                
-                addDetail();
-            
                 p_nEditMode  = EditMode.READY;
                 return true;
             }
@@ -648,7 +637,9 @@ public class SP_Sales implements XMasDetTrans{
             }
             
             //check if user is allowed
-            if (!p_oNautilus.isUserAuthorized(p_oApproval, UserLevel.MANAGER + UserLevel.SUPERVISOR, AccessLevel.PURCHASING)){
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER,
+                    AccessLevel.SALES)){
                 setMessage(System.getProperty("sMessagex"));
                 System.setProperty("sMessagex", "");
                 return false;
@@ -659,13 +650,27 @@ public class SP_Sales implements XMasDetTrans{
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
+            if (!p_bWithParent) p_oNautilus.beginTrans();
+            
             if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
                 setMessage(p_oNautilus.getMessage());
                 return false;
             }
+            
+            //issue customer order
+            if (!unissueOrder()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
+            
+            if (!unsaveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
+            
+            if (!p_bWithParent) p_oNautilus.commitTrans();
 
             p_nEditMode  = EditMode.UNKNOWN;
-
             return true;
         } catch (SQLException ex) {
             ex.printStackTrace();
@@ -691,7 +696,9 @@ public class SP_Sales implements XMasDetTrans{
             }
 
             //check if user is allowed
-            if (!p_oNautilus.isUserAuthorized(p_oApproval, UserLevel.MANAGER + UserLevel.SUPERVISOR, AccessLevel.PURCHASING)){
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER, 
+                    AccessLevel.SALES)){
                 setMessage(System.getProperty("sMessagex"));
                 System.setProperty("sMessagex", "");
                 return false;
@@ -1224,6 +1231,32 @@ public class SP_Sales implements XMasDetTrans{
         return false;
     }
     
+    private boolean unsaveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getItemCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oDetail.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oDetail.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oDetail.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.Sales(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.DELETE)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
+    }
+    
      private void getSalesman(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
         JSONObject loJSON = searchSalesman(fsFieldNm, foValue, true);
         JSONParser loParser = new JSONParser();
@@ -1326,4 +1359,88 @@ public class SP_Sales implements XMasDetTrans{
         
         saveToDisk(RecordStatus.ACTIVE, "");
     }   
+    
+    private boolean issueOrder()  throws SQLException{
+        String lsSQL;
+        
+        p_oDetail.beforeFirst();
+        while (p_oDetail.next()){
+            if (!"".equals((String) p_oDetail.getObject("sStockIDx"))){
+                if (!p_oDetail.getString("sOrderNox").isEmpty()){
+                    lsSQL = "UPDATE SP_Sales_Order_Detail SET" +
+                            "   nIssuedxx = nIssuedxx + " + p_oDetail.getInt("nQuantity") +
+                            " WHERE sTransNox = " + SQLUtil.toSQL(p_oDetail.getString("sOrderNox")) +
+                                " AND sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx"));
+
+                    if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Order_Detail", p_sBranchCd, "") <= 0){
+                        if(!p_oNautilus.getMessage().isEmpty())
+                            setMessage(p_oNautilus.getMessage());
+                        else
+                            setMessage("Unable to update Customer Order.");
+
+                        return false;
+                    } 
+                    
+//                    lsSQL = "UPDATE Inv_Master SET" +
+//                                "  nResvOrdr = nResvOrdr + " + p_oDetail.getInt("nQuantity") +
+//                                ", dModified = " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
+//                            " WHERE sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx")) +
+//                                " AND sBranchCd = " + SQLUtil.toSQL((String) p_oNautilus.getBranchConfig("sBranchCd"));
+//                    
+//                    if(p_oNautilus.executeUpdate(lsSQL, "Inv_Master", p_sBranchCd, "") <= 0){
+//                        if(!p_oNautilus.getMessage().isEmpty())
+//                            setMessage(p_oNautilus.getMessage());
+//                        else
+//                            setMessage("Unable to update Branch Inventory.");
+//
+//                        return false;
+//                    } 
+                }
+            }
+        }
+        
+        return true;
+    }
+    
+    private boolean unissueOrder() throws SQLException{
+        String lsSQL;
+        
+        p_oDetail.beforeFirst();
+        while (p_oDetail.next()){
+            if (!"".equals((String) p_oDetail.getObject("sStockIDx"))){
+                if (!p_oDetail.getString("sOrderNox").isEmpty()){
+                    lsSQL = "UPDATE SP_Sales_Order_Detail SET" +
+                            "   nIssuedxx = nIssuedxx - " + p_oDetail.getInt("nQuantity") +
+                            " WHERE sTransNox = " + SQLUtil.toSQL(p_oDetail.getString("sOrderNox")) +
+                                " AND sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx"));
+
+                    if(p_oNautilus.executeUpdate(lsSQL, "SP_Sales_Order_Detail", p_sBranchCd, "") <= 0){
+                        if(!p_oNautilus.getMessage().isEmpty())
+                            setMessage(p_oNautilus.getMessage());
+                        else
+                            setMessage("Unable to update Customer Order.");
+
+                        return false;
+                    } 
+
+//                    lsSQL = "UPDATE Inv_Master SET" +
+//                                "  nResvOrdr = nResvOrdr - " + p_oDetail.getInt("nQuantity") +
+//                                ", dModified = " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
+//                            " WHERE sStockIDx = " + SQLUtil.toSQL(p_oDetail.getString("sStockIDx")) +
+//                                " AND sBranchCd = " + SQLUtil.toSQL((String) p_oNautilus.getBranchConfig("sBranchCd"));
+//                    
+//                    if(p_oNautilus.executeUpdate(lsSQL, "Inv_Master", p_sBranchCd, "") <= 0){
+//                        if(!p_oNautilus.getMessage().isEmpty())
+//                            setMessage(p_oNautilus.getMessage());
+//                        else
+//                            setMessage("Unable to update Branch Inventory.");
+//
+//                        return false;
+//                    } 
+                }
+            }
+        }
+        
+        return true;
+    }
 }
