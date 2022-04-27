@@ -816,6 +816,71 @@ public class SalesOrder implements XMasDetTrans{
         return p_oTemp;
     }
     
+    public boolean isReleasable(){
+         int lnRow = getItemCount();
+        
+        int lnApproved;
+        int lnReleased;
+        int lnIssuedxx;
+        int lnQtyOnHnd;
+        
+        boolean lbReleasex = false;
+        
+        //check for releasable items
+        for (int lnCtr = 0; lnCtr <= lnRow - 1; lnCtr ++){                               
+            lnReleased = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nReleased")));
+            lnIssuedxx = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nIssuedxx")));
+            lnQtyOnHnd = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd")));
+            
+            if (lnReleased - lnIssuedxx > 0 && lnReleased - lnIssuedxx <= lnQtyOnHnd){
+                lbReleasex = true;
+                break;
+            }
+        }
+        
+        return lbReleasex;
+    }
+    
+    public boolean ReleaseOrder(double fnCredtAmt){        
+        SP_Sales loSales = new SP_Sales(p_oNautilus, p_sBranchCd, true);
+        loSales.setSaveToDisk(true);
+        
+        if (loSales.NewTransaction()){
+            int lnRow = getItemCount();
+        
+            int lnAddedRow;
+            int lnReleased;
+            int lnIssuedxx;
+            int lnQtyOnHnd;
+
+            //check for releasable items
+            lnAddedRow = 0;
+            for (int lnCtr = 0; lnCtr <= lnRow - 1; lnCtr ++){                               
+                lnReleased = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nReleased")));
+                lnIssuedxx = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nIssuedxx")));
+                lnQtyOnHnd = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd")));
+                
+                if (lnReleased - lnIssuedxx <= lnQtyOnHnd){
+                    loSales.setDetail(lnAddedRow, "sStockIDx", (String) getDetail(lnCtr, "sStockIDx"));
+                    loSales.setDetail(lnAddedRow, "sOrderNox", (String) getMaster("sTransNox"));
+                    loSales.setDetail(lnAddedRow, "nQuantity", (String) getDetail(lnCtr, lnReleased - lnIssuedxx));
+                    
+                    lnAddedRow += 1;
+                }
+            }
+            
+            loSales.setMaster("sClientID", (String) getMaster("sClientID"));
+            loSales.setMaster("sSourceCd", SOURCE_CODE);
+            loSales.setMaster("sSourceNo", (String) getMaster("sTransNox"));
+            loSales.setMaster("nDeductnx", fnCredtAmt);
+        } else {
+            setMessage(loSales.getMessage());
+            return false;
+        }
+        
+        return true;
+    }
+    
     public boolean SendToPO(){
         try {
             if (p_nEditMode != EditMode.READY){
@@ -827,25 +892,6 @@ public class SalesOrder implements XMasDetTrans{
                 setMessage("Transaction was still open.");
                 return false;
             } 
-            
-//            String lsSQL = "SELECT" +
-//                                "  sTransNox" +
-//                                ", cTranStat" +
-//                            " FROM PO_Master" +
-//                            " WHERE sSourceCd = 'CO'" +
-//                                " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
-//                                " AND cTranStat NOT IN ('3', '4')";
-//            ResultSet loRS = p_oNautilus.executeQuery(lsSQL);
-//            
-//            boolean lbHasRecord = loRS.next();
-//            MiscUtil.close(loRS);
-//            
-//            if (lbHasRecord){
-//                setMessage("This customer order already has Purchase Order.");    
-//                return false;
-//            }
-//            
-//            MiscUtil.close(loRS);
 
             //check if detail has different brands
             String lsBrandCde = "";
@@ -1154,12 +1200,7 @@ public class SalesOrder implements XMasDetTrans{
             }
             
              //check if there is an item with no on hand
-            for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){               
-                if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQtyOnHnd"))) <= 0){
-                    setMessage("Some order has no inventory on hand.");
-                    return false;
-                }
-                
+            for (int lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){                               
                 if (Integer.parseInt(String.valueOf(getDetail(lnCtr, "nReleased"))) <
                     Integer.parseInt(String.valueOf(getDetail(lnCtr, "nIssuedxx")))){
                     setMessage("Some order has less released quantity compared to issued quantity.");

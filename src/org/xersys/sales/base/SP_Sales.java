@@ -781,7 +781,7 @@ public class SP_Sales implements XMasDetTrans{
     }
 
     @Override
-    public ArrayList<Temp_Transactions> TempTransactions() {
+    public ArrayList<Temp_Transactions> TempTransactions() {        
         return p_oTemp;
     }
     
