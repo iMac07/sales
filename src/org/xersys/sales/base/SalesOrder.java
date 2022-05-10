@@ -863,7 +863,7 @@ public class SalesOrder implements XMasDetTrans{
                 if (lnReleased - lnIssuedxx <= lnQtyOnHnd){
                     loSales.setDetail(lnAddedRow, "sStockIDx", (String) getDetail(lnCtr, "sStockIDx"));
                     loSales.setDetail(lnAddedRow, "sOrderNox", (String) getMaster("sTransNox"));
-                    loSales.setDetail(lnAddedRow, "nQuantity", (String) getDetail(lnCtr, lnReleased - lnIssuedxx));
+                    loSales.setDetail(lnAddedRow, "nQuantity", lnReleased - lnIssuedxx);
                     
                     lnAddedRow += 1;
                 }
