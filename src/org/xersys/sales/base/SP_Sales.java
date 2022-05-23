@@ -58,6 +58,7 @@ public class SP_Sales implements XMasDetTrans{
     private ArrayList<Temp_Transactions> p_oTemp;
     
     private InvSearchF p_oSearchItem;
+    private ClientSearch p_oSearchClient;
     private ClientSearch p_oSearchSalesman;
     private SalesSearch p_oSearchCO;
 
@@ -68,6 +69,7 @@ public class SP_Sales implements XMasDetTrans{
         p_nEditMode = EditMode.UNKNOWN;
         
         p_oSearchItem = new InvSearchF(p_oNautilus, InvSearchF.SearchType.searchBranchStocks);
+        p_oSearchClient = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchClient);
         p_oSearchSalesman = new ClientSearch(p_oNautilus, ClientSearch.SearchType.searchEmployee);
         p_oSearchCO = new SalesSearch(p_oNautilus, SalesSearch.SearchType.searchCustomerOrder);
         
@@ -114,6 +116,9 @@ public class SP_Sales implements XMasDetTrans{
             p_oMaster.first();
             
             switch (fnIndex){
+                case 5: //sClientID
+                    getClient("a.sClientID", foValue);
+                    return;
                 case 18: //sSourceNo
                     getCustomerOrder("a.sTransNox", foValue);
                     break;
@@ -823,6 +828,18 @@ public class SP_Sales implements XMasDetTrans{
         return p_oSearchSalesman;
     }
     
+    public JSONObject searchClient(String fsKey, Object foValue, boolean fbExact){
+        p_oSearchClient.setKey(fsKey);
+        p_oSearchClient.setValue(foValue);
+        p_oSearchClient.setExact(fbExact);
+        
+        return p_oSearchClient.Search();
+    }
+    
+    public ClientSearch getSearchClient(){
+        return p_oSearchClient;
+    }
+    
     private String getSQ_Master(){
         return "SELECT" +
                     "  a.sTransNox" +
@@ -848,7 +865,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", a.sApprvlCd" +
                     ", a.dCreatedx" +
                     ", a.dModified" +
-                    ", b.sClientNm" +
+                    ", b.sClientNm xClientNm" +
                     ", c.sClientNm xSalesman" +
                 " FROM " + MASTER_TABLE + " a" +
                     " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
@@ -1442,5 +1459,22 @@ public class SP_Sales implements XMasDetTrans{
         }
         
         return true;
+    }
+    
+    private void getClient(String fsFieldNm, Object foValue) throws SQLException, ParseException{       
+        JSONObject loJSON = searchClient(fsFieldNm, foValue, true);
+        JSONParser loParser = new JSONParser();
+
+        if ("success".equals((String) loJSON.get("result"))){
+            loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+
+            p_oMaster.first();
+            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sClientID"), (String) loJSON.get("sClientID"));
+            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "xClientNm"), (String) loJSON.get("sClientNm"));
+            p_oMaster.updateRow();           
+            
+            if (p_oListener != null) p_oListener.MasterRetreive("sClientID", (String) getMaster("xClientNm"));
+            saveToDisk(RecordStatus.ACTIVE, "");
+        }
     }
 }
