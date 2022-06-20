@@ -338,6 +338,8 @@ public class SalesSearch implements iSearch{
                 lsSQL = getSQ_SPWholeSale(); break;
             case searchCustomerOrder:
                 lsSQL = getSQ_CustomerOrder();
+            case searchWSOrder:
+                lsSQL = getSQ_WSOrder();
             default:
                 break;
         }
@@ -435,6 +437,7 @@ public class SalesSearch implements iSearch{
                 _fields.add("xSalesman"); _fields_descript.add("Salesman");
                 break;
             case searchCustomerOrder:
+            case searchWSOrder:
                 _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Part No.");
                 _filter_list.add("IFNULL(c.sClientNm, '')"); _filter_description.add("Brand Code");
                 _filter_list.add("a.cTranStat"); _filter_description.add("Status");
@@ -563,12 +566,28 @@ public class SalesSearch implements iSearch{
 	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
     }
     
+    private String getSQ_WSOrder(){
+	return "SELECT" +
+	            "  a.sTransNox" +
+	            ", a.sBranchCd" +
+	            ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+	            ", a.sReferNox" +
+	            ", a.sRemarksx" +
+	            ", Round((a.nTranTotl + a.nFreightx) - ((a.nTranTotl * a.nDiscount / 100) + a.nAddDiscx), 2) nTranTotl" +
+	            ", a.nAmtPaidx" +
+	            ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", a.cTranStat" +
+	        " FROM SP_WSO_Master a" +
+	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+    }
+    
     //let outside objects can call this variable without initializing the class.
     public static enum SearchType{
         searchSPSales,
         searchSPWholeSale,
         searchJobEstimate,
         searchJobOrder,
-        searchCustomerOrder
+        searchCustomerOrder,
+        searchWSOrder
     }
 }

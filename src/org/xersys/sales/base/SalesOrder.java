@@ -868,8 +868,10 @@ public class SalesOrder implements XMasDetTrans{
                     lnAddedRow += 1;
                 }
             }
+                       
+            if (!"".equals((String) getMaster("sClientID"))) 
+                loSales.setMaster("sClientID", (String) getMaster("sClientID"));
             
-            loSales.setMaster("sClientID", (String) getMaster("sClientID"));
             loSales.setMaster("sSourceCd", SOURCE_CODE);
             loSales.setMaster("sSourceNo", (String) getMaster("sTransNox"));
             loSales.setMaster("nDeductnx", fnCredtAmt);
@@ -1218,10 +1220,10 @@ public class SalesOrder implements XMasDetTrans{
             //assign values to master record
             p_oMaster.first();
             
-            if (p_oMaster.getString("sClientID").equals("")){
-                setMessage("No customer detected.");
-                return false;
-            }
+//            if (p_oMaster.getString("sClientID").equals("")){
+//                setMessage("No customer detected.");
+//                return false;
+//            }
             
             p_oMaster.updateObject("sBranchCd", (String) p_oNautilus.getBranchConfig("sBranchCd"));
             p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
