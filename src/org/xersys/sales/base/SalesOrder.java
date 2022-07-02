@@ -981,8 +981,19 @@ public class SalesOrder implements XMasDetTrans{
                     ", a.dCreatedx" +
                     ", a.dModified" +
                     ", b.sClientNm xClientNm" +
+                    ", TRIM(CONCAT(IFNULL(d.sHouseNox, ''), ' ', d.sAddressx, ' ', IFNULL(f.sBrgyName, ''), ' ', e.sTownName)) xAddressx" +
+                    ", IFNULL(c.sInvNumbr, 'N-O-N-E') xInvNumbr" +
+                    ", IFNULL(c.nVATSales, 0.00) + IFNULL(c.nVATAmtxx, 0.00) xAmtPaidx" +
                 " FROM " + MASTER_TABLE + " a" +
-                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+                    " LEFT JOIN Client_Master b" +
+                        " LEFT JOIN Client_Address d ON b.sClientID = d.sClientID" +
+                            " AND d.nPriority = 1" +
+                        " LEFT JOIN TownCity e ON d.sTownIDxx = e.sTownIDxx" +
+                        " LEFT JOIN Barangay f ON d.sBrgyIDxx = f.sBrgyIDxx" +
+                    " ON a.sClientID = b.sClientID" +
+                    " LEFT JOIN Receipt_Master c ON a.sTransNox = c.sSourceNo" +
+                            " AND c.sSourceCd = 'CO'" +
+                            " AND c.cTranStat <> '3'";
     }
     
     private String getSQ_Detail(){
@@ -1272,9 +1283,11 @@ public class SalesOrder implements XMasDetTrans{
         for (int lnCtr = 0; lnCtr < lnRow; lnCtr++){
             lnQuantity = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQuantity")));
             lnUnitPrce = ((Number)getDetail(lnCtr, "nUnitPrce")).doubleValue();
+            
             lnDiscount = ((Number)getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
             lnAddDiscx = ((Number)getDetail(lnCtr, "nAddDiscx")).doubleValue();
-            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) + lnAddDiscx;
+            
+            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) - (lnQuantity * lnAddDiscx);
             
             lnTranTotal += lnDetlTotl;
         }

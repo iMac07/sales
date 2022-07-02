@@ -464,7 +464,7 @@ public class SP_Sales implements XMasDetTrans{
                     return false;
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman;xInvNumbr;xAddressx");
             } else { //old record
             }
             
@@ -873,9 +873,20 @@ public class SP_Sales implements XMasDetTrans{
                     ", a.dModified" +
                     ", b.sClientNm xClientNm" +
                     ", c.sClientNm xSalesman" +
+                    ", TRIM(CONCAT(IFNULL(d.sHouseNox, ''), ' ', d.sAddressx, ' ', IFNULL(f.sBrgyName, ''), ' ', e.sTownName)) xAddressx" +
+                    ", IFNULL(g.sInvNumbr, 'N-O-N-E') xInvNumbr" +
+                    ", IFNULL(g.nVATSales, 0.00) + IFNULL(g.nVATAmtxx, 0.00) xAmtPaidx" +
                 " FROM " + MASTER_TABLE + " a" +
-                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID" +
-                    " LEFT JOIN Client_Master c ON a.sSalesman = c.sClientID";
+                    " LEFT JOIN Client_Master b" +
+                        " LEFT JOIN Client_Address d ON b.sClientID = d.sClientID" +
+                            " AND d.nPriority = 1" +
+                        " LEFT JOIN TownCity e ON d.sTownIDxx = e.sTownIDxx" +
+                        " LEFT JOIN Barangay f ON d.sBrgyIDxx = f.sBrgyIDxx" +
+                    " ON a.sClientID = b.sClientID" +
+                    " LEFT JOIN Client_Master c ON a.sSalesman = c.sClientID" +
+                    " LEFT JOIN Sales_Invoice g ON a.sTransNox = g.sSourceNo" +
+                        " AND g.sSourceCd = 'SO'" +
+                        " AND g.cTranStat <> '3'";
     }
     
     private String getSQ_Detail(){
@@ -1164,9 +1175,11 @@ public class SP_Sales implements XMasDetTrans{
         for (int lnCtr = 0; lnCtr < lnRow; lnCtr++){
             lnQuantity = Integer.parseInt(String.valueOf(getDetail(lnCtr, "nQuantity")));
             lnUnitPrce = ((Number)getDetail(lnCtr, "nUnitPrce")).doubleValue();
+            
             lnDiscount = ((Number)getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
             lnAddDiscx = ((Number)getDetail(lnCtr, "nAddDiscx")).doubleValue();
-            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) + lnAddDiscx;
+            
+            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) - (lnQuantity * lnAddDiscx);
             
             lnTranTotal += lnDetlTotl;
         }

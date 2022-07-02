@@ -337,7 +337,7 @@ public class SalesSearch implements iSearch{
             case searchSPWholeSale:
                 lsSQL = getSQ_SPWholeSale(); break;
             case searchCustomerOrder:
-                lsSQL = getSQ_CustomerOrder();
+                lsSQL = getSQ_CustomerOrder(); break;
             case searchWSOrder:
                 lsSQL = getSQ_WSOrder();
             default:
