@@ -873,6 +873,7 @@ public class SP_Sales implements XMasDetTrans{
                     ", a.dModified" +
                     ", b.sClientNm xClientNm" +
                     ", c.sClientNm xSalesman" +
+                    ", IFNULL(g.sClientNm, '') vClientNm" +
                     ", TRIM(CONCAT(IFNULL(d.sHouseNox, ''), ' ', d.sAddressx, ' ', IFNULL(f.sBrgyName, ''), ' ', e.sTownName)) xAddressx" +
                     ", IFNULL(g.sInvNumbr, 'N-O-N-E') xInvNumbr" +
                     ", IFNULL(g.nVATSales, 0.00) + IFNULL(g.nVATAmtxx, 0.00) xAmtPaidx" +

@@ -981,6 +981,7 @@ public class SalesOrder implements XMasDetTrans{
                     ", a.dCreatedx" +
                     ", a.dModified" +
                     ", b.sClientNm xClientNm" +
+                    ", IFNULL(c.sClientNm, '') vClientNm" +
                     ", TRIM(CONCAT(IFNULL(d.sHouseNox, ''), ' ', d.sAddressx, ' ', IFNULL(f.sBrgyName, ''), ' ', e.sTownName)) xAddressx" +
                     ", IFNULL(c.sInvNumbr, 'N-O-N-E') xInvNumbr" +
                     ", IFNULL(c.nVATSales, 0.00) + IFNULL(c.nVATAmtxx, 0.00) xAmtPaidx" +

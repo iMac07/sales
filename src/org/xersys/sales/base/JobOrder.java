@@ -1271,6 +1271,27 @@ public class JobOrder implements XMasDetTrans{
                     " ON a.sStockIDx = b.sStockIDx";
     }
     
+    public String getSQ_Receipt_Info(){
+        if (p_nEditMode != EditMode.READY) return "";
+        
+        return "SELECT" +
+                    "  sTransNox" +
+                    ", dTransact" +
+                    ", sInvNumbr" +
+                    ", sClientNm" +
+                    ", nVATSales" +
+                    ", nVATAmtxx" +
+                    ", nNonVATSl" +
+                    ", nZroVATSl" +
+                    ", nCWTAmtxx" +
+                    ", nAdvPaymx" +
+                    ", nCashAmtx" + 
+                " FROM Receipt_Master a" +
+                " WHERE sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
+                    " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                    " AND cTranStat <> '3'";
+    }
+    
     private void setMessage(String fsValue){
         p_sMessagex = fsValue;
     }
