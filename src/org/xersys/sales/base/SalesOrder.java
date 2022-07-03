@@ -489,7 +489,7 @@ public class SalesOrder implements XMasDetTrans{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm;vClientNm;xAddressx;xInvNumbr;xAmtPaidx");
             } else { //old record
                 //save detail
                 p_oDetail.beforeFirst();
@@ -512,6 +512,9 @@ public class SalesOrder implements XMasDetTrans{
                                 return false;
                             } 
                         }
+                        
+                         p_nEditMode = EditMode.READY;
+                        return true;
                     }
                 }
             }
@@ -994,7 +997,7 @@ public class SalesOrder implements XMasDetTrans{
                     " ON a.sClientID = b.sClientID" +
                     " LEFT JOIN Receipt_Master c ON a.sTransNox = c.sSourceNo" +
                             " AND c.sSourceCd = 'CO'" +
-                            " AND c.cTranStat <> '3'";
+                            " AND c.cTranStat <> '3'"; 
     }
     
     private String getSQ_Detail(){

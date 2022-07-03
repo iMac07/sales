@@ -1271,25 +1271,64 @@ public class JobOrder implements XMasDetTrans{
                     " ON a.sStockIDx = b.sStockIDx";
     }
     
-    public String getSQ_Receipt_Info(){
-        if (p_nEditMode != EditMode.READY) return "";
+    public ResultSet getReceipt_Info(){
+        if (p_nEditMode != EditMode.READY) return null;
         
-        return "SELECT" +
-                    "  sTransNox" +
-                    ", dTransact" +
-                    ", sInvNumbr" +
-                    ", sClientNm" +
-                    ", nVATSales" +
-                    ", nVATAmtxx" +
-                    ", nNonVATSl" +
-                    ", nZroVATSl" +
-                    ", nCWTAmtxx" +
-                    ", nAdvPaymx" +
-                    ", nCashAmtx" + 
-                " FROM Receipt_Master a" +
-                " WHERE sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
-                    " AND sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
-                    " AND cTranStat <> '3'";
+        String lsSQL = "SELECT" +
+                            "  a.sTransNox" +
+                            ", a.dTransact" +
+                            ", a.sInvNumbr" +
+                            ", a.sClientNm" +
+                            ", a.nVATSales" +
+                            ", a.nVATAmtxx" +
+                            ", a.nNonVATSl" +
+                            ", a.nZroVATSl" +
+                            ", a.nCWTAmtxx" +
+                            ", a.nAdvPaymx" +
+                            ", a.nCashAmtx" + 
+                            ", a.nVATSales + a.nVATAmtxx xAmountxx" +
+                            ", IFNULL(TRIM(CONCAT(IFNULL(b.sHouseNox, ''), ' ', b.sAddressx, ' ', IFNULL(d.sBrgyName, ''), ' ', c.sTownName)), 'N/A') xAddressx" +
+                        " FROM Receipt_Master a" +
+                            " LEFT JOIN Client_Address b" +
+                                " LEFT JOIN TownCity c ON b.sTownIDxx = c.sTownIDxx" +
+                                " LEFT JOIN Barangay d ON b.sBrgyIDxx = d.sBrgyIDxx" +
+                            " ON a.sClientID = b.sClientID" +
+                                " AND b.nPriority = 1" +
+                        " WHERE a.sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
+                            " AND a.sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                            " AND a.cTranStat <> '3'";
+        
+        return p_oNautilus.executeQuery(lsSQL);
+    }
+    
+    public ResultSet getInvoice_Info(){
+        if (p_nEditMode != EditMode.READY) return null;
+        
+        String lsSQL = "SELECT" +
+                            "  a.sTransNox" +
+                            ", a.dTransact" +
+                            ", a.sInvNumbr" +
+                            ", a.sClientNm" +
+                            ", a.nVATSales" +
+                            ", a.nVATAmtxx" +
+                            ", a.nNonVATSl" +
+                            ", a.nZroVATSl" +
+                            ", a.nCWTAmtxx" +
+                            ", a.nAdvPaymx" +
+                            ", a.nCashAmtx" + 
+                            ", a.nVATSales + a.nVATAmtxx xAmountxx" +
+                            ", IFNULL(TRIM(CONCAT(IFNULL(b.sHouseNox, ''), ' ', b.sAddressx, ' ', IFNULL(d.sBrgyName, ''), ' ', c.sTownName)), 'N/A') xAddressx" +
+                        " FROM Sales_Invoice a" +
+                            " LEFT JOIN Client_Address b" +
+                                " LEFT JOIN TownCity c ON b.sTownIDxx = c.sTownIDxx" +
+                                " LEFT JOIN Barangay d ON b.sBrgyIDxx = d.sBrgyIDxx" +
+                            " ON a.sClientID = b.sClientID" +
+                                " AND b.nPriority = 1" +
+                        " WHERE a.sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
+                            " AND a.sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                            " AND a.cTranStat <> '3'";
+        
+        return p_oNautilus.executeQuery(lsSQL);
     }
     
     private void setMessage(String fsValue){

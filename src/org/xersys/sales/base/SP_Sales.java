@@ -464,7 +464,7 @@ public class SP_Sales implements XMasDetTrans{
                     return false;
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman;xInvNumbr;xAddressx");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, "SP_Sales_Master", "sClientNm;xSalesman;xInvNumbr;xAddressx;vClientNm;xAddressx;xInvNumbr;xAmtPaidx");
             } else { //old record
             }
             
