@@ -186,8 +186,8 @@ public class JobOrder implements XMasDetTrans{
                 case 21: //"nLabrPaid"
                 case 22: //"nPartPaid"
                 case 23: //"nVATRatex"
-                case 24: //"nDiscount"
-                case 25: //"nAddDiscx"
+                case 24: //"nLabrDisc"
+                case 25: //"nPartDisc"
                 case 26: //"nFreightx"
                 case 27: //"nAmtPaidx"
                     if (StringUtil.isNumeric(String.valueOf(foValue)))
@@ -423,10 +423,10 @@ public class JobOrder implements XMasDetTrans{
         try {
             p_oDetail.last();
             return p_oDetail.getRow();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            setMessage(e.getMessage());
-            return -1;
+        } catch (Exception e) {
+            //e.printStackTrace();
+            //setMessage(e.getMessage());
+            return 0;
         }
     }
     
@@ -434,10 +434,10 @@ public class JobOrder implements XMasDetTrans{
         try {
             p_oPartsx.last();
             return p_oPartsx.getRow();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            setMessage(e.getMessage());
-            return -1;
+        } catch (Exception e) {
+            //e.printStackTrace();
+            //setMessage(e.getMessage());
+            return 0;
         }
     }
 
@@ -966,6 +966,8 @@ public class JobOrder implements XMasDetTrans{
                 setMessage("No transaction to update.");
                 return false;
             }
+            
+            p_oMaster.first();
 
             if ((TransactionStatus.STATE_CANCELLED).equals((String) p_oMaster.getObject("cTranStat"))){
                 setMessage("Unable to post cancelled transactions.");
@@ -1027,7 +1029,9 @@ public class JobOrder implements XMasDetTrans{
             setMaster("sDealerCd", (String) loEstimate.getMaster("sDealerCd"));
             setMaster("sSrvcAdvs", (String) loEstimate.getMaster("sSrvcAdvs"));
             setMaster("sTermCode", (String) loEstimate.getMaster("sTermCode"));
-
+            setMaster("nLabrDisc", (double) loEstimate.getMaster("nLabrDisc"));
+            setMaster("nPartDisc", (double) loEstimate.getMaster("nPartDisc"));
+            
             for (int lnCtr = 0; lnCtr <= loEstimate.getItemCount()-1; lnCtr++){
                 setDetail(lnCtr, "sLaborCde", (String) loEstimate.getDetail(lnCtr, "sLaborCde"));
                 setDetail(lnCtr, "nQuantity", (int) loEstimate.getDetail(lnCtr, "nQuantity"));
@@ -1202,8 +1206,8 @@ public class JobOrder implements XMasDetTrans{
                     ", a.nLabrPaid" +
                     ", a.nPartPaid" +
                     ", a.nVATRatex" +
-                    ", a.nDiscount" +
-                    ", a.nAddDiscx" +
+                    ", a.nLabrDisc" +
+                    ", a.nPartDisc" +
                     ", a.nFreightx" +
                     ", a.nAmtPaidx" +
                     ", a.sTermCode" +
@@ -1682,9 +1686,13 @@ public class JobOrder implements XMasDetTrans{
             lnPartsTotl += lnDetlTotl;
         }
         
-        lnTranTotal = lnLaborTotl + lnPartsTotl;
-        
         p_oMaster.first();
+        
+        //compute master discount
+        lnTranTotal = 0.00;        
+        lnTranTotal += lnLaborTotl - (lnLaborTotl * p_oMaster.getDouble("nLabrDisc") / 100);
+        lnTranTotal += lnPartsTotl - (lnPartsTotl * p_oMaster.getDouble("nPartDisc") / 100);
+        
         p_oMaster.updateObject("nLabrTotl", lnLaborTotl);
         p_oMaster.updateObject("nPartTotl", lnPartsTotl);
         p_oMaster.updateObject("nTranTotl", lnTranTotal);
