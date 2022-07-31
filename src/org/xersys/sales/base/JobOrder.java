@@ -979,9 +979,6 @@ public class JobOrder implements XMasDetTrans{
                 return false;
             }
 
-            //todo:
-            //  check if user level validation is still needed
-
             String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_POSTED +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
@@ -1005,6 +1002,52 @@ public class JobOrder implements XMasDetTrans{
     @Override
     public ArrayList<Temp_Transactions> TempTransactions() {
         return p_oTemp;
+    }
+    
+    public boolean ReleaseTransaction() {
+        System.out.println(this.getClass().getSimpleName() + ".ReleaseTransaction()");
+        
+        try {
+            if (p_nEditMode != EditMode.READY){
+                setMessage("No transaction to update.");
+                return false;
+            }
+            
+            p_oMaster.first();
+
+            if ((TransactionStatus.STATE_CANCELLED).equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Unable to post cancelled transactions.");
+                return false;
+            }
+
+            if ((TransactionStatus.STATE_POSTED).equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Transaction was already posted.");
+                return false;
+            }
+            
+            if (("4").equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Transaction was already released.");
+                return false;
+            }
+
+            String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
+                                "  cTranStat = '4'" + 
+                                ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
+                            " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
+
+            if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
+                setMessage(p_oNautilus.getMessage());
+                return false;
+            }
+
+            p_nEditMode  = EditMode.UNKNOWN;
+
+            return true;
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            setMessage(ex.getMessage());
+            return false;
+        }
     }
     
     public void setTranStat(int fnValue){
