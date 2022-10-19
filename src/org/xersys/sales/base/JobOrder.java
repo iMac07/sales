@@ -13,9 +13,12 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.xersys.clients.search.ClientSearch;
+import org.xersys.commander.contants.AccessLevel;
 import org.xersys.commander.contants.EditMode;
 import org.xersys.commander.contants.RecordStatus;
 import org.xersys.commander.contants.TransactionStatus;
+import org.xersys.commander.contants.UserLevel;
+import org.xersys.commander.iface.LApproval;
 import org.xersys.commander.iface.LMasDetTrans;
 import org.xersys.commander.iface.LOthTrans;
 import org.xersys.commander.iface.XMasDetTrans;
@@ -24,6 +27,7 @@ import org.xersys.commander.util.CommonUtil;
 import org.xersys.commander.util.MiscUtil;
 import org.xersys.commander.util.SQLUtil;
 import org.xersys.commander.util.StringUtil;
+import org.xersys.inventory.base.InvTrans;
 import org.xersys.inventory.search.InvSearchF;
 import org.xersys.lib.pojo.Temp_Transactions;
 import org.xersys.parameters.search.ParamSearchF;
@@ -38,6 +42,7 @@ public class JobOrder implements XMasDetTrans{
     private final XNautilus p_oNautilus;
     private LMasDetTrans p_oListener;
     private LOthTrans p_oOthListener;
+    private LApproval p_oApproval;
     
     private boolean p_bSaveToDisk;
     private final boolean p_bWithParent;
@@ -110,6 +115,10 @@ public class JobOrder implements XMasDetTrans{
         p_oOthListener = foValue;
     }
     
+    public void setApprvListener(LApproval foValue){
+        p_oApproval = foValue;
+    }
+    
     @Override
     public void setListener(LMasDetTrans foValue) {
         p_oListener = foValue;
@@ -177,8 +186,8 @@ public class JobOrder implements XMasDetTrans{
                 case 21: //"nLabrPaid"
                 case 22: //"nPartPaid"
                 case 23: //"nVATRatex"
-                case 24: //"nDiscount"
-                case 25: //"nAddDiscx"
+                case 24: //"nLabrDisc"
+                case 25: //"nPartDisc"
                 case 26: //"nFreightx"
                 case 27: //"nAmtPaidx"
                     if (StringUtil.isNumeric(String.valueOf(foValue)))
@@ -414,10 +423,10 @@ public class JobOrder implements XMasDetTrans{
         try {
             p_oDetail.last();
             return p_oDetail.getRow();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            setMessage(e.getMessage());
-            return -1;
+        } catch (Exception e) {
+            //e.printStackTrace();
+            //setMessage(e.getMessage());
+            return 0;
         }
     }
     
@@ -425,10 +434,10 @@ public class JobOrder implements XMasDetTrans{
         try {
             p_oPartsx.last();
             return p_oPartsx.getRow();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            setMessage(e.getMessage());
-            return -1;
+        } catch (Exception e) {
+            //e.printStackTrace();
+            //setMessage(e.getMessage());
+            return 0;
         }
     }
 
@@ -573,8 +582,9 @@ public class JobOrder implements XMasDetTrans{
                 lbLoad = toDTO(loTran.getString("sPayloadx"));
             }
             
+            refreshOnHand();
             computeTotal();
-        } catch (SQLException ex) {
+        } catch (SQLException | ParseException ex) {
             setMessage(ex.getMessage());
             lbLoad = false;
         } finally {
@@ -669,6 +679,7 @@ public class JobOrder implements XMasDetTrans{
                 
                 lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "xClientNm;xEngineNo;xFrameNox;xTermName;xSrvcAdvs;xDealerNm;xMechanic");
             } else { //old record
+                System.err.println("bakit ey?");
             }
             
             if (lsSQL.equals("")){
@@ -684,6 +695,11 @@ public class JobOrder implements XMasDetTrans{
                 else
                     setMessage("No record updated");
             } 
+               
+            if (!saveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
             
             saveToDisk(RecordStatus.INACTIVE, (String) p_oMaster.getObject("sTransNox"));
 
@@ -850,15 +866,34 @@ public class JobOrder implements XMasDetTrans{
                 return false;
             }
 
+            //check if user is allowed
+            if (!p_oNautilus.isUserAuthorized(p_oApproval, 
+                    UserLevel.MANAGER + UserLevel.SUPERVISOR + UserLevel.OWNER, 
+                    AccessLevel.SALES)){
+                setMessage(System.getProperty("sMessagex"));
+                System.setProperty("sMessagex", "");
+                return false;
+            }
+            
+            if (!p_bWithParent) p_oNautilus.beginTrans();
+            
+            if (!unsaveInvTrans()){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
+                return false;
+            }
+            
             String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_CANCELLED +
                                 ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
                             " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
 
             if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
+                if (!p_bWithParent) p_oNautilus.rollbackTrans();
                 setMessage(p_oNautilus.getMessage());
                 return false;
             }
+            
+            if (!p_bWithParent) p_oNautilus.commitTrans();
 
             p_nEditMode  = EditMode.UNKNOWN;
 
@@ -931,6 +966,8 @@ public class JobOrder implements XMasDetTrans{
                 setMessage("No transaction to update.");
                 return false;
             }
+            
+            p_oMaster.first();
 
             if ((TransactionStatus.STATE_CANCELLED).equals((String) p_oMaster.getObject("cTranStat"))){
                 setMessage("Unable to post cancelled transactions.");
@@ -941,9 +978,6 @@ public class JobOrder implements XMasDetTrans{
                 setMessage("Transaction was already posted.");
                 return false;
             }
-
-            //todo:
-            //  check if user level validation is still needed
 
             String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
                                 "  cTranStat = " + TransactionStatus.STATE_POSTED +
@@ -970,6 +1004,52 @@ public class JobOrder implements XMasDetTrans{
         return p_oTemp;
     }
     
+    public boolean ReleaseTransaction() {
+        System.out.println(this.getClass().getSimpleName() + ".ReleaseTransaction()");
+        
+        try {
+            if (p_nEditMode != EditMode.READY){
+                setMessage("No transaction to update.");
+                return false;
+            }
+            
+            p_oMaster.first();
+
+            if ((TransactionStatus.STATE_CANCELLED).equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Unable to post cancelled transactions.");
+                return false;
+            }
+
+            if ((TransactionStatus.STATE_POSTED).equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Transaction was already posted.");
+                return false;
+            }
+            
+            if (("4").equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Transaction was already released.");
+                return false;
+            }
+
+            String lsSQL = "UPDATE " + MASTER_TABLE + " SET" +
+                                "  cTranStat = '4'" + 
+                                ", dModified= " + SQLUtil.toSQL(p_oNautilus.getServerDate()) +
+                            " WHERE sTransNox = " + SQLUtil.toSQL((String) p_oMaster.getObject("sTransNox"));
+
+            if (p_oNautilus.executeUpdate(lsSQL, MASTER_TABLE, p_sBranchCd, "") <= 0){
+                setMessage(p_oNautilus.getMessage());
+                return false;
+            }
+
+            p_nEditMode  = EditMode.UNKNOWN;
+
+            return true;
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            setMessage(ex.getMessage());
+            return false;
+        }
+    }
+    
     public void setTranStat(int fnValue){
         p_nTranStat = fnValue;
     }
@@ -992,7 +1072,9 @@ public class JobOrder implements XMasDetTrans{
             setMaster("sDealerCd", (String) loEstimate.getMaster("sDealerCd"));
             setMaster("sSrvcAdvs", (String) loEstimate.getMaster("sSrvcAdvs"));
             setMaster("sTermCode", (String) loEstimate.getMaster("sTermCode"));
-
+            setMaster("nLabrDisc", (double) loEstimate.getMaster("nLabrDisc"));
+            setMaster("nPartDisc", (double) loEstimate.getMaster("nPartDisc"));
+            
             for (int lnCtr = 0; lnCtr <= loEstimate.getItemCount()-1; lnCtr++){
                 setDetail(lnCtr, "sLaborCde", (String) loEstimate.getDetail(lnCtr, "sLaborCde"));
                 setDetail(lnCtr, "nQuantity", (int) loEstimate.getDetail(lnCtr, "nQuantity"));
@@ -1167,8 +1249,8 @@ public class JobOrder implements XMasDetTrans{
                     ", a.nLabrPaid" +
                     ", a.nPartPaid" +
                     ", a.nVATRatex" +
-                    ", a.nDiscount" +
-                    ", a.nAddDiscx" +
+                    ", a.nLabrDisc" +
+                    ", a.nPartDisc" +
                     ", a.nFreightx" +
                     ", a.nAmtPaidx" +
                     ", a.sTermCode" +
@@ -1227,12 +1309,73 @@ public class JobOrder implements XMasDetTrans{
                     ", b.sBrandCde" + 
                     ", b.sModelCde" +
                     ", b.sColorCde" +
+                    ", a.nIssuedxx" +
                 " FROM Job_Order_Parts a" +	
                     " LEFT JOIN Inventory b" +
                         " LEFT JOIN Inv_Master c" +
                             " ON b.sStockIDx = c.sStockIDx" +
                                 " AND c.sBranchCd = " + SQLUtil.toSQL(p_sBranchCd) +
                     " ON a.sStockIDx = b.sStockIDx";
+    }
+    
+    public ResultSet getReceipt_Info(){
+        if (p_nEditMode != EditMode.READY) return null;
+        
+        String lsSQL = "SELECT" +
+                            "  a.sTransNox" +
+                            ", a.dTransact" +
+                            ", a.sInvNumbr" +
+                            ", a.sClientNm" +
+                            ", a.nVATSales" +
+                            ", a.nVATAmtxx" +
+                            ", a.nNonVATSl" +
+                            ", a.nZroVATSl" +
+                            ", a.nCWTAmtxx" +
+                            ", a.nAdvPaymx" +
+                            ", a.nCashAmtx" + 
+                            ", a.nVATSales + a.nVATAmtxx xAmountxx" +
+                            ", IFNULL(TRIM(CONCAT(IFNULL(b.sHouseNox, ''), ' ', b.sAddressx, ' ', IFNULL(d.sBrgyName, ''), ' ', c.sTownName)), 'N/A') xAddressx" +
+                        " FROM Receipt_Master a" +
+                            " LEFT JOIN Client_Address b" +
+                                " LEFT JOIN TownCity c ON b.sTownIDxx = c.sTownIDxx" +
+                                " LEFT JOIN Barangay d ON b.sBrgyIDxx = d.sBrgyIDxx" +
+                            " ON a.sClientID = b.sClientID" +
+                                " AND b.nPriority = 1" +
+                        " WHERE a.sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
+                            " AND a.sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                            " AND a.cTranStat <> '3'";
+        
+        return p_oNautilus.executeQuery(lsSQL);
+    }
+    
+    public ResultSet getInvoice_Info(){
+        if (p_nEditMode != EditMode.READY) return null;
+        
+        String lsSQL = "SELECT" +
+                            "  a.sTransNox" +
+                            ", a.dTransact" +
+                            ", a.sInvNumbr" +
+                            ", a.sClientNm" +
+                            ", a.nVATSales" +
+                            ", a.nVATAmtxx" +
+                            ", a.nNonVATSl" +
+                            ", a.nZroVATSl" +
+                            ", a.nCWTAmtxx" +
+                            ", a.nAdvPaymx" +
+                            ", a.nCashAmtx" + 
+                            ", a.nVATSales + a.nVATAmtxx xAmountxx" +
+                            ", IFNULL(TRIM(CONCAT(IFNULL(b.sHouseNox, ''), ' ', b.sAddressx, ' ', IFNULL(d.sBrgyName, ''), ' ', c.sTownName)), 'N/A') xAddressx" +
+                        " FROM Sales_Invoice a" +
+                            " LEFT JOIN Client_Address b" +
+                                " LEFT JOIN TownCity c ON b.sTownIDxx = c.sTownIDxx" +
+                                " LEFT JOIN Barangay d ON b.sBrgyIDxx = d.sBrgyIDxx" +
+                            " ON a.sClientID = b.sClientID" +
+                                " AND b.nPriority = 1" +
+                        " WHERE a.sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
+                            " AND a.sSourceNo = " + SQLUtil.toSQL((String) getMaster("sTransNox")) +
+                            " AND a.cTranStat <> '3'";
+        
+        return p_oNautilus.executeQuery(lsSQL);
     }
     
     private void setMessage(String fsValue){
@@ -1251,7 +1394,7 @@ public class JobOrder implements XMasDetTrans{
         }
     }
     
-    private void loadTempTransactions(){
+    public void loadTempTransactions(){
         String lsSQL = "SELECT * FROM xxxTempTransactions" +
                         " WHERE cRecdStat = '1'" +
                             " AND sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE);
@@ -1483,14 +1626,41 @@ public class JobOrder implements XMasDetTrans{
                 addDetail(); //add detail to prevent error on the next attempt of saving
                 return false;
             }
+                            
+            refreshOnHand();
+            computeTotal();
             
-            lnCtr = getPartsCount();
+            int lnRow = getPartsCount();
             
-            p_oPartsx.absolute(lnCtr);
+            //check if there is an item with no on hand
+            for (lnCtr = 0; lnCtr <= lnRow -1; lnCtr ++){
+                if (!"".equals((String) getParts(lnCtr, "sStockIDx"))){
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQtyOnHnd"))) <= 0){
+                        setMessage("Order has no inventory on hand.");
+                        return false;
+                    }
+
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQtyOnHnd"))) <
+                        Integer.parseInt(String.valueOf(getParts(lnCtr, "nQuantity")))){
+                        setMessage("Order has less inventory on hand compared to order.");
+                        return false;
+                    }
+                    
+                    if (Integer.parseInt(String.valueOf(getParts(lnCtr, "nQuantity"))) !=
+                        Integer.parseInt(String.valueOf(getParts(lnCtr, "nIssuedxx")))){
+                        setMessage("Order quantity and issued quantity discrepancy detected.");
+                        return false;
+                    }
+                }
+            }
+            
+            lnRow = getPartsCount();
+            
+            p_oPartsx.absolute(lnRow);
             if ("".equals((String) p_oPartsx.getObject("sStockIDx"))){
                 p_oPartsx.deleteRow();
             }
-            
+
             //assign values to master record
             p_oMaster.first();
             p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
@@ -1508,7 +1678,7 @@ public class JobOrder implements XMasDetTrans{
             p_oMaster.updateRow();
 
             return true;
-        } catch (SQLException e) {
+        } catch (SQLException | ParseException e) {
             e.printStackTrace();
             setMessage(e.getMessage());
             return false;
@@ -1559,9 +1729,13 @@ public class JobOrder implements XMasDetTrans{
             lnPartsTotl += lnDetlTotl;
         }
         
-        lnTranTotal = lnLaborTotl + lnPartsTotl;
-        
         p_oMaster.first();
+        
+        //compute master discount
+        lnTranTotal = 0.00;        
+        lnTranTotal += lnLaborTotl - (lnLaborTotl * p_oMaster.getDouble("nLabrDisc") / 100);
+        lnTranTotal += lnPartsTotl - (lnPartsTotl * p_oMaster.getDouble("nPartDisc") / 100);
+        
         p_oMaster.updateObject("nLabrTotl", lnLaborTotl);
         p_oMaster.updateObject("nPartTotl", lnPartsTotl);
         p_oMaster.updateObject("nTranTotl", lnTranTotal);
@@ -1750,4 +1924,78 @@ public class JobOrder implements XMasDetTrans{
                 break;
         }
     }
+    
+    private boolean saveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getPartsCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oPartsx.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.ADDNEW)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
+    }
+    
+    private boolean unsaveInvTrans() throws SQLException{
+        InvTrans loTrans = new InvTrans(p_oNautilus, p_sBranchCd);
+        int lnRow = getPartsCount();
+        
+        if (loTrans.InitTransaction()){
+            p_oMaster.first();
+            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                p_oPartsx.absolute(lnCtr + 1);
+                loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
+                loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
+            }
+            
+            if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
+                                        p_oMaster.getDate("dTransact"), 
+                                        EditMode.DELETE)){
+                setMessage(loTrans.getMessage());
+                return false;
+            }
+            
+            return true;
+        }
+        
+        setMessage(loTrans.getMessage());
+        return false;
+    }
+    
+    //get the latest quantity on hand of the items
+    private void refreshOnHand() throws SQLException, ParseException{
+        JSONObject loJSON;
+        JSONParser loParser = new JSONParser();
+        
+        for (int lnCtr = 0; lnCtr <= getItemCount()-1; lnCtr++){
+            p_oPartsx.absolute(lnCtr + 1);
+            
+            if (p_oPartsx.getString("sStockIDx").isEmpty()) break;
+            
+            loJSON = searchParts("a.sStockIDx", p_oPartsx.getString("sStockIDx"), true);
+            
+            if ("success".equals((String) loJSON.get("result"))){
+                loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
+                p_oPartsx.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));               
+                p_oPartsx.updateRow();
+            }
+        }
+        
+        saveToDisk(RecordStatus.ACTIVE, "");
+    }   
 }

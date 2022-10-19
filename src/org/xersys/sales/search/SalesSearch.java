@@ -336,6 +336,10 @@ public class SalesSearch implements iSearch{
                 lsSQL = getSQ_Job_Order(); break;
             case searchSPWholeSale:
                 lsSQL = getSQ_SPWholeSale(); break;
+            case searchCustomerOrder:
+                lsSQL = getSQ_CustomerOrder(); break;
+            case searchWSOrder:
+                lsSQL = getSQ_WSOrder();
             default:
                 break;
         }
@@ -357,7 +361,23 @@ public class SalesSearch implements iSearch{
         //add filter on query
         if (!_filter.isEmpty()){
             for (int lnCtr = 0; lnCtr <= _filter.size()-1; lnCtr++){
-                lsSQL = MiscUtil.addCondition(lsSQL, getFilterField(_filter.get(lnCtr)) + " LIKE " + SQLUtil.toSQL(_filter_value.get(lnCtr)));
+                if (getFilterField(_filter.get(lnCtr)).toLowerCase().contains("ctranstat")){
+                    String lsStat = String.valueOf(_filter_value.get(lnCtr));
+                    String lsCondition = "";
+        
+                    if (lsStat.length() > 1){
+                        for (int lnCtr2 = 0; lnCtr2 <= lsStat.length()-1; lnCtr2++){
+                            lsCondition += ", " + SQLUtil.toSQL(Character.toString(lsStat.charAt(lnCtr2)));
+                        }
+
+                        lsCondition = getFilterField(_filter.get(lnCtr)) + " IN (" + lsCondition.substring(2) + ")";
+                    } else 
+                        lsCondition = getFilterField(_filter.get(lnCtr)) + " = " + SQLUtil.toSQL(lsStat);
+                    
+                    lsSQL = MiscUtil.addCondition(lsSQL, lsCondition);
+                } else {
+                    lsSQL = MiscUtil.addCondition(lsSQL, getFilterField(_filter.get(lnCtr)) + " LIKE " + SQLUtil.toSQL(_filter_value.get(lnCtr)));
+                }
             }
         }
         
@@ -415,6 +435,18 @@ public class SalesSearch implements iSearch{
                 _fields.add("xClientNm"); _fields_descript.add("Client");
                 _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 _fields.add("xSalesman"); _fields_descript.add("Salesman");
+                break;
+            case searchCustomerOrder:
+            case searchWSOrder:
+                _filter_list.add("IFNULL(b.sClientNm, '')"); _filter_description.add("Part No.");
+                _filter_list.add("IFNULL(c.sClientNm, '')"); _filter_description.add("Brand Code");
+                _filter_list.add("a.cTranStat"); _filter_description.add("Status");
+                
+                _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
+                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
+                _fields.add("dTransact"); _fields_descript.add("Date");
+                _fields.add("xClientNm"); _fields_descript.add("Client");
+                _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 break;
             case searchJobEstimate:
             case searchJobOrder:
@@ -519,11 +551,43 @@ public class SalesSearch implements iSearch{
                     " LEFT JOIN Term f ON a.sTermCode = f.sTermCode";
     }
     
+    private String getSQ_CustomerOrder(){
+	return "SELECT" +
+	            "  a.sTransNox" +
+	            ", a.sBranchCd" +
+	            ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+	            ", a.sReferNox" +
+	            ", a.sRemarksx" +
+	            ", Round((a.nTranTotl + a.nFreightx) - ((a.nTranTotl * a.nDiscount / 100) + a.nAddDiscx), 2) nTranTotl" +
+	            ", a.nAmtPaidx" +
+	            ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", a.cTranStat" +
+	        " FROM SP_Sales_Order_Master a" +
+	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+    }
+    
+    private String getSQ_WSOrder(){
+	return "SELECT" +
+	            "  a.sTransNox" +
+	            ", a.sBranchCd" +
+	            ", DATE_FORMAT(a.dTransact, '%b %d, %Y') dTransact" +
+	            ", a.sReferNox" +
+	            ", a.sRemarksx" +
+	            ", Round((a.nTranTotl + a.nFreightx) - ((a.nTranTotl * a.nDiscount / 100) + a.nAddDiscx), 2) nTranTotl" +
+	            ", a.nAmtPaidx" +
+	            ", IFNULL(b.sClientNm, '') xClientNm" +
+                    ", a.cTranStat" +
+	        " FROM SP_WSO_Master a" +
+	            " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+    }
+    
     //let outside objects can call this variable without initializing the class.
     public static enum SearchType{
         searchSPSales,
         searchSPWholeSale,
         searchJobEstimate,
-        searchJobOrder
+        searchJobOrder,
+        searchCustomerOrder,
+        searchWSOrder
     }
 }
