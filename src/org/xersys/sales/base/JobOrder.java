@@ -1072,8 +1072,8 @@ public class JobOrder implements XMasDetTrans{
             setMaster("sDealerCd", (String) loEstimate.getMaster("sDealerCd"));
             setMaster("sSrvcAdvs", (String) loEstimate.getMaster("sSrvcAdvs"));
             setMaster("sTermCode", (String) loEstimate.getMaster("sTermCode"));
-            setMaster("nLabrDisc", (double) loEstimate.getMaster("nLabrDisc"));
-            setMaster("nPartDisc", (double) loEstimate.getMaster("nPartDisc"));
+            setMaster("nLabrDisc", Double.valueOf(String.valueOf(loEstimate.getMaster("nLabrDisc"))));
+            setMaster("nPartDisc", Double.valueOf(String.valueOf(loEstimate.getMaster("nPartDisc"))));
             
             for (int lnCtr = 0; lnCtr <= loEstimate.getItemCount()-1; lnCtr++){
                 setDetail(lnCtr, "sLaborCde", (String) loEstimate.getDetail(lnCtr, "sLaborCde"));
