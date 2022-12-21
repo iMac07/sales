@@ -419,9 +419,9 @@ public class SalesSearch implements iSearch{
                 _filter_list.add("a.cTranStat"); _filter_description.add("Status");
                 
                 _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
-                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
-                _fields.add("dTransact"); _fields_descript.add("Date");
                 _fields.add("xClientNm"); _fields_descript.add("Client");
+                _fields.add("dTransact"); _fields_descript.add("Date");
+                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
                 _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
                 break;
             case searchSPSales:
@@ -430,11 +430,10 @@ public class SalesSearch implements iSearch{
                 _filter_list.add("a.cTranStat"); _filter_description.add("Status");
                 
                 _fields.add("sTransNox"); _fields_descript.add("Trans. No.");
-                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
-                _fields.add("dTransact"); _fields_descript.add("Date");
                 _fields.add("xClientNm"); _fields_descript.add("Client");
+                _fields.add("dTransact"); _fields_descript.add("Date");
+                _fields.add("sRemarksx"); _fields_descript.add("Remarks");
                 _fields.add("nTranTotl"); _fields_descript.add("Tran. Total");
-                _fields.add("xSalesman"); _fields_descript.add("Salesman");
                 break;
             case searchCustomerOrder:
             case searchWSOrder:

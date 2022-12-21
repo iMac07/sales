@@ -438,7 +438,7 @@ public class WholeSale implements XMasDetTrans{
                     }
                 }
                 
-                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm;xSalesman");
+                lsSQL = MiscUtil.rowset2SQL(p_oMaster, MASTER_TABLE, "sClientNm;xClientNm;vClientNm;xAddressx;xInvNumbr;xAmtPaidx;sInvoiceT");
             } else { //old record
             }
             
@@ -794,9 +794,24 @@ public class WholeSale implements XMasDetTrans{
                     ", a.sAprvCode" +
                     ", a.dCreatedx" +
                     ", a.dModified" +
-                    ", b.sClientNm" +
+                    ", b.sClientNm xClientNm" +
+                    ", IFNULL(g.sClientNm, '') vClientNm" +
+                    ", TRIM(CONCAT(IFNULL(d.sHouseNox, ''), ' ', d.sAddressx, ' ', IFNULL(f.sBrgyName, ''), ' ', e.sTownName)) xAddressx" +
+                    ", IFNULL(g.sInvNumbr, RIGHT(h.sTransNox, 6)) xInvNumbr" +
+                    ", IF(g.sInvNumbr IS NULL, 'Charge Invoice', 'Sales Invoice') sInvoiceT" +
                 " FROM " + MASTER_TABLE + " a" +
-                    " LEFT JOIN Client_Master b ON a.sClientID = b.sClientID";
+                    " LEFT JOIN Client_Master b" +
+                        " LEFT JOIN Client_Address d ON b.sClientID = d.sClientID" +
+                            " AND d.nPriority = 1" +
+                        " LEFT JOIN TownCity e ON d.sTownIDxx = e.sTownIDxx" +
+                        " LEFT JOIN Barangay f ON d.sBrgyIDxx = f.sBrgyIDxx" +
+                    " ON a.sClientID = b.sClientID" +
+                    " LEFT JOIN Sales_Invoice g ON a.sTransNox = g.sSourceNo" +
+                        " AND g.sSourceCd = 'WS'" +
+                        " AND g.cTranStat <> '3'" +
+                    " LEFT JOIN Charge_Invoice h ON a.sTransNox = h.sSourceNo" +
+                        " AND h.sSourceCd = 'WS'" +
+                        " AND h.cTranStat <> '3'";
     }
     
     private String getSQ_Detail(){
@@ -1169,10 +1184,10 @@ public class WholeSale implements XMasDetTrans{
 
             p_oMaster.first();
             p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sClientID"), (String) loJSON.get("sClientID"));
-            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "sClientNm"), (String) loJSON.get("sClientNm"));
+            p_oMaster.updateObject(MiscUtil.getColumnIndex(p_oMaster, "xClientNm"), (String) loJSON.get("sClientNm"));
             p_oMaster.updateRow();           
             
-            if (p_oListener != null) p_oListener.MasterRetreive("sClientID", (String) getMaster("sClientNm"));
+            if (p_oListener != null) p_oListener.MasterRetreive("sClientID", (String) getMaster("xClientNm"));
             saveToDisk(RecordStatus.ACTIVE, "");
         }
     }

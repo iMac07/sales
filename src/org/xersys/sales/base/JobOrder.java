@@ -1713,7 +1713,7 @@ public class JobOrder implements XMasDetTrans{
             lnUnitPrce = ((Number) getDetail(lnCtr, "nUnitPrce")).doubleValue();
             lnDiscount = ((Number) getDetail(lnCtr, "nDiscount")).doubleValue() / 100;
             lnAddDiscx = ((Number) getDetail(lnCtr, "nAddDiscx")).doubleValue();
-            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) + lnAddDiscx;
+            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount) - lnAddDiscx));
             
             lnLaborTotl += lnDetlTotl;
         }
@@ -1724,7 +1724,7 @@ public class JobOrder implements XMasDetTrans{
             lnUnitPrce = ((Number) getParts(lnCtr, "nUnitPrce")).doubleValue();
             lnDiscount = ((Number) getParts(lnCtr, "nDiscount")).doubleValue() / 100;
             lnAddDiscx = ((Number) getParts(lnCtr, "nAddDiscx")).doubleValue();
-            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount))) + lnAddDiscx;
+            lnDetlTotl = (lnQuantity * (lnUnitPrce - (lnUnitPrce * lnDiscount) - lnAddDiscx));
             
             lnPartsTotl += lnDetlTotl;
         }
@@ -1992,6 +1992,7 @@ public class JobOrder implements XMasDetTrans{
             if ("success".equals((String) loJSON.get("result"))){
                 loJSON = (JSONObject) ((JSONArray) loParser.parse((String) loJSON.get("payload"))).get(0);
                 p_oPartsx.updateObject("nQtyOnHnd", Integer.parseInt(String.valueOf(loJSON.get("nQtyOnHnd"))));               
+                p_oPartsx.updateObject("nUnitPrce", (Number) loJSON.get("nSelPrce1"));               
                 p_oPartsx.updateRow();
             }
         }
