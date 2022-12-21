@@ -865,6 +865,11 @@ public class JobOrder implements XMasDetTrans{
                 setMessage("Unable to cancel posted transactions.");
                 return false;
             }
+            
+            if (("4").equals((String) p_oMaster.getObject("cTranStat"))){
+                setMessage("Unable to cancel released transactions.");
+                return false;
+            }
 
             //check if user is allowed
             if (!p_oNautilus.isUserAuthorized(p_oApproval, 
@@ -1957,17 +1962,19 @@ public class JobOrder implements XMasDetTrans{
         
         if (loTrans.InitTransaction()){
             p_oMaster.first();
-            for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
-                p_oPartsx.absolute(lnCtr + 1);
-                loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
-                loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
-            }
-            
-            if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
-                                        p_oMaster.getDate("dTransact"), 
-                                        EditMode.DELETE)){
-                setMessage(loTrans.getMessage());
-                return false;
+            if (!p_oPartsx.getString("sStockIDx").isEmpty()){
+                for (int lnCtr = 0; lnCtr <= lnRow-1; lnCtr++){
+                    p_oPartsx.absolute(lnCtr + 1);
+                    loTrans.setMaster(lnCtr, "sStockIDx", p_oPartsx.getString("sStockIDx"));
+                    loTrans.setMaster(lnCtr, "nQuantity", p_oPartsx.getInt("nQuantity"));
+                }
+
+                if (!loTrans.JobOrder(p_oMaster.getString("sTransNox"), 
+                                            p_oMaster.getDate("dTransact"), 
+                                            EditMode.DELETE)){
+                    setMessage(loTrans.getMessage());
+                    return false;
+                }
             }
             
             return true;
