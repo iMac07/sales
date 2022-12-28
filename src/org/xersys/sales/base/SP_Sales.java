@@ -4,6 +4,7 @@ import com.mysql.jdbc.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Iterator;
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetFactory;
@@ -125,20 +126,24 @@ public class SP_Sales implements XMasDetTrans{
                 case 7: //sSalesman
                     getSalesman("a.sClientID", foValue);
                     return;
-                case 3: //dTransact
                 case 22: //dCreatedx
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_TIMESTAMP))
-                        p_oMaster.setObject(fnIndex, foValue);
+                        p_oMaster.updateObject(fnIndex, foValue);
                     else 
-                        p_oMaster.setObject(fnIndex, p_oNautilus.getServerDate());
+                        p_oMaster.updateObject(fnIndex, p_oNautilus.getServerDate());
                     
                     p_oMaster.updateRow();
                     break;
+                case 3: //dTransact
+                    p_oMaster.updateObject(fnIndex, foValue);
+                    p_oMaster.updateRow();
+                    System.out.println(p_oMaster.getObject(fnIndex));
+                    break;
                 case 16: //dDueDatex
                     if (StringUtil.isDate(String.valueOf(foValue), SQLUtil.FORMAT_SHORT_DATE))
-                        p_oMaster.setObject(fnIndex, foValue);
+                        p_oMaster.updateObject(fnIndex, foValue);
                     else 
-                        p_oMaster.setObject(fnIndex, p_oNautilus.getServerDate());
+                        p_oMaster.updateObject(fnIndex, p_oNautilus.getServerDate());
                     
                     p_oMaster.updateRow();
                     break;
@@ -1130,7 +1135,11 @@ public class SP_Sales implements XMasDetTrans{
             }
             
             p_oMaster.updateObject("sBranchCd", (String) p_oNautilus.getBranchConfig("sBranchCd"));
-            p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
+            
+            String lsDate = SQLUtil.dateFormat(p_oMaster.getObject("dTransact"), SQLUtil.FORMAT_SHORT_DATE);
+            String lsTime = SQLUtil.dateFormat(p_oNautilus.getServerDate(), SQLUtil.FORMAT_TIME);
+               
+            p_oMaster.updateObject("dTransact", SQLUtil.toDate(lsDate+ " " + lsTime, SQLUtil.FORMAT_TIMESTAMP));
 
             String lsSQL = "SELECT dCreatedx FROM xxxTempTransactions" +
                             " WHERE sSourceCd = " + SQLUtil.toSQL(SOURCE_CODE) +
@@ -1157,6 +1166,7 @@ public class SP_Sales implements XMasDetTrans{
         p_oMaster.moveToInsertRow();
         
         MiscUtil.initRowSet(p_oMaster);
+        p_oMaster.updateObject("dTransact", p_oNautilus.getServerDate());
         p_oMaster.updateObject("cTranStat", TransactionStatus.STATE_OPEN);
         
         p_oMaster.insertRow();
@@ -1255,8 +1265,8 @@ public class SP_Sales implements XMasDetTrans{
             }
             
             if (!loTrans.Sales(p_oMaster.getString("sTransNox"), 
-                                        p_oMaster.getDate("dTransact"), 
-                                        EditMode.ADDNEW)){
+                                (Date) p_oMaster.getObject("dTransact"), 
+                                EditMode.ADDNEW)){
                 setMessage(loTrans.getMessage());
                 return false;
             }
